@@ -3,64 +3,143 @@ import pyrealsense2 as rs
 import numpy as np
 from dataclasses import dataclass
 import cv2
+from math import degrees, atan2, sqrt
+from typing import Optional
 
 from src.io.frames import FrameData
+from src.piano.key import AngularBounds
 
 MAX_RANGE_M = 4.0  # Maximum range for the bounding box in meters
 
 @dataclass
-class BoxDetection:
-    """Represents a detection within a bounding box"""
-    num_valid_points: int
+class Detection:
     min_distance_m: float
-    box_name: str
+    num_valid_points: int
+    azimuth_deg: float
+    sector_points: list[tuple[int, int]]  # List of (x,y) points defining sector
 
-def get_bounding_box_detections(frame_data: FrameData, bounds, name, color):
-    tic = time.time()
-    height, width  = frame_data.depth_image.shape
-    px, py = np.meshgrid(np.arange(width), np.arange(height))
-    depths = frame_data.depth_image.astype(float) / 1000.0  # Convert to meters
+def get_bounding_box_detections(
+    frame_data: 'FrameData',
+    bounds: tuple[tuple[float, float, float], tuple[float, float, float]],
+    name: str,
+    color: tuple[int, int, int]
+) -> Detection | None:
+    """Get distance measurements within a 3D bounding box."""
+    
+    # Convert 3D bounds to 2D screen coordinates
+    box_points = []
+    for point in [
+        (bounds[0][0], bounds[0][1], bounds[0][2]),  # Near corner
+        (bounds[1][0], bounds[1][1], bounds[1][2])   # Far corner
+    ]:
+        pixel = rs.rs2_project_point_to_pixel(
+            frame_data.depth_intrinsics, 
+            [point[0], point[1], point[2]]
+        )
+        box_points.append((int(pixel[0]), int(pixel[1])))
 
-    x_min, y_min, z_min = bounds[0]
-    x_max, y_max, z_max = bounds[1]
-        
-    # Project 3D corners to 2D image space
-    corners_3d = [
-        (x_min, y_min, z_min),  # Front bottom left
-        (x_max, y_min, z_min),  # Front bottom right
-        (x_max, y_max, z_min),  # Front top right
-        (x_min, y_max, z_min),  # Front top left
-    ]
-    
-    corners_2d = []
-    for x, y, z in corners_3d:
-        pixel = rs.rs2_project_point_to_pixel(frame_data.depth_intrinsics, [x, y, z])
-        corners_2d.append((int(pixel[0]), int(pixel[1])))
-    projection_time = time.time() - tic
-    # # Draw box
-    # for i in range(len(corners_2d)):
-    #     pt1 = corners_2d[i]
-    #     pt2 = corners_2d[(i + 1) % len(corners_2d)]
-    #     cv2.line(frame_data.color_image_rgb, pt1, pt2, color, 2)
-    
-    # Calculate points and distance inside box
-    X = (px - frame_data.depth_intrinsics.ppx) * depths / frame_data.depth_intrinsics.fx
-    Y = (py - frame_data.depth_intrinsics.ppy) * depths / frame_data.depth_intrinsics.fy
-    Z = depths
-    
-    valid_mask = (depths > 0) & (X >= x_min) & (X <= x_max) & \
-                (Y >= y_min) & (Y <= y_max) & \
-                (Z >= z_min) & (Z <= z_max)
-    
-    min_distance_m = np.min(depths[valid_mask]) if np.any(valid_mask) else MAX_RANGE_M
-    num_valid_points = np.count_nonzero(valid_mask)
-    
-    detection = BoxDetection(
-        num_valid_points=num_valid_points,
-        min_distance_m=min_distance_m,
-        box_name=name
+    # Draw the 2D bounding box
+    cv2.rectangle(
+        frame_data.color_image_rgb,
+        box_points[0],
+        box_points[1],
+        color,
+        2
     )
 
-    detection_time = time.time() - projection_time
-    #print(f"{projection_time=}, {detection_time=}")
-    return detection
+    # Get depth values within the box
+    x1, y1 = box_points[0]
+    x2, y2 = box_points[1]
+    x1, x2 = min(x1, x2), max(x1, x2)
+    y1, y2 = min(y1, y2), max(y1, y2)
+    
+    depth_roi = frame_data.depth_image[y1:y2, x1:x2]
+    
+    # Filter out zero depth values
+    valid_depths = depth_roi[depth_roi > 0]
+    
+    if len(valid_depths) == 0:
+        return None
+
+    return Detection(
+        min_distance_m=np.min(valid_depths) / 1000.0,  # Convert mm to meters
+        num_valid_points=len(valid_depths),
+        azimuth_deg=0.0,  # Placeholder value
+        sector_points=[(x1, y1), (x2, y2)]
+    )
+
+def get_angular_detection(
+    frame_data: FrameData,
+    bounds: AngularBounds,
+    name: str,
+    color: tuple[int, int, int]
+) -> Optional[Detection]:
+    """Get distance measurements within an angular sector."""
+    
+    height, width = frame_data.depth_image.shape
+    depth_scale = frame_data.depth_scale
+    
+    # Create pixel coordinates
+    pixel_x, pixel_y = np.meshgrid(np.arange(width), np.arange(height))
+    
+    # Get camera parameters
+    fx = frame_data.depth_intrinsics.fx
+    fy = frame_data.depth_intrinsics.fy
+    ppx = frame_data.depth_intrinsics.ppx
+    ppy = frame_data.depth_intrinsics.ppy
+    
+    # Convert depth to meters
+    depth = frame_data.depth_image * depth_scale
+    
+    # Vectorized deprojection using camera model equations
+    x_coords = (pixel_x - ppx) * depth / fx
+    y_coords = (pixel_y - ppy) * depth / fy
+    z_coords = depth
+    
+    # Calculate angles
+    azimuth = np.degrees(np.arctan2(x_coords, z_coords))
+    elevation = np.degrees(np.arctan2(y_coords, z_coords))
+    ranges = np.sqrt(x_coords**2 + y_coords**2 + z_coords**2)
+    
+    # Create mask for points within angular bounds
+    mask = (
+        (azimuth >= bounds.min_azimuth) & 
+        (azimuth <= bounds.max_azimuth) &
+        (elevation >= bounds.min_elevation) &
+        (elevation <= bounds.max_elevation) &
+        (ranges >= bounds.min_range) &
+        (ranges <= bounds.max_range) &
+        (depth > 0)  # Only consider valid depth points
+    )
+    
+    valid_depths = frame_data.depth_image[mask]
+    if len(valid_depths) == 0:
+        return None
+        
+    # Draw the sector boundaries
+    sector_points = []
+    for az in [bounds.min_azimuth, bounds.max_azimuth]:
+        for r in [bounds.min_range, bounds.max_range]:
+            x = r * np.sin(np.radians(az))
+            z = r * np.cos(np.radians(az))
+            pixel = rs.rs2_project_point_to_pixel(
+                frame_data.depth_intrinsics,
+                [x, 0, z]
+            )
+            sector_points.append((int(pixel[0]), int(pixel[1])))
+    
+    # Draw the sector
+    cv2.polylines(
+        frame_data.color_image_rgb,
+        [np.array(sector_points)],
+        True,
+        color,
+        2
+    )
+    
+    return Detection(
+        min_distance_m=np.min(valid_depths) / 1000.0,
+        num_valid_points=len(valid_depths),
+        azimuth_deg=np.mean(azimuth[mask]),
+        sector_points=sector_points
+    )

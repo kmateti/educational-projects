@@ -8,35 +8,43 @@ import math
 from dataclasses import dataclass
 
 from src.piano.tone_generator import ToneGenerator
-from src.piano.key import Key, C_MAJOR_FREQUENCIES, get_frequency_from_distance
-from src.detectors.bounding_box_detector import get_bounding_box_detections
+from src.piano.key import Key, AngularBounds, C_MAJOR_FREQUENCIES, get_frequency_from_distance
+from src.detectors.bounding_box_detector import get_angular_detection
 from src.io.frames import get_color_and_depth_frames, FrameData
 
-# Then replace the individual constants with a list of Keys:
+# Initialize keys with angular bounds
 KEYS = [
-    Key("Key 1", (0, 0, 255), ((-0.3, -0.1, 0.1), (-0.2, 0.1, 5.0))),
-    Key("Key 2", (0, 255, 0), ((-0.1, -0.1, 0.1), (0.1, 0.1, 5.0))),
-    Key("Key 3", (255, 0, 0), ((0.2, -0.1, 0.1), (0.3, 0.1, 5.0)))
+    Key("Left", (0, 0, 255), AngularBounds(-30, -10)),
+    Key("Center", (0, 255, 0), AngularBounds(-10, 10)),
+    Key("Right", (255, 0, 0), AngularBounds(10, 30))
 ]
 
 def overlay_bounding_boxes(frame_data: FrameData, keys: list[Key]):
-    """Overlays multiple bounding boxes and returns their distances using vectorized operations."""
+    """Overlays angular sectors and returns their detections."""
     
-    # Process all boxes
     detections = []
     for idx, key in enumerate(keys):
+        detection = get_angular_detection(frame_data, key.angular_bounds, key.name, key.color)
         
-        detection = get_bounding_box_detections(frame_data, key.bounds, key.name, key.color)
-
         if detection is None:
             continue
 
-        # Overlay text
+        # Draw the detection info
         text_y = 30 + (idx * 30)
-        note = key.get_note(detection.min_distance_m, detection.num_valid_points)
-        overlay_text = f"{key.name}: {detection.min_distance_m:.2f}m, Points: {detection.num_valid_points}, Note: {note}"
-        cv2.putText(frame_data.color_image_rgb, overlay_text, (10, text_y), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, key.color, 2)
+        note = key.get_note(detection.min_distance_m)
+        text = f"{key.name}: {detection.min_distance_m:.2f}m, Az: {detection.azimuth_deg:.1f}°"
+        if note:
+            text += f" Note: {note}"
+            
+        cv2.putText(
+            frame_data.color_image_rgb, 
+            text,
+            (10, text_y), 
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            key.color,
+            2
+        )
         
         detections.append(detection)
     

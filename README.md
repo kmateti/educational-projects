@@ -14,13 +14,40 @@ Also using this to learn `uv` python management, see [here](https://docs.astral.
 ### Dependencies
 This project uses modern Python packaging with `pyproject.toml` and `uv`. 
 
-```bash
-# Install dependencies from lock file
-uv pip install -r requirements.lock
+```powershell
+# Create and activate virtual environment
+python -m venv .venv
+.\.venv\Scripts\activate
 
-# Update lock file (after changing pyproject.toml)
-uv pip compile pyproject.toml -o requirements.lock
+# Install dependencies
+uv pip install -e .
+uv pip install pytest pytest-cov
 ```
+
+### Testing
+
+First, generate synthetic test data:
+```powershell
+# Make sure you're in your virtual environment
+.\.venv\Scripts\activate
+
+# Generate test data
+python -m scripts.generate_test_data
+```
+
+Run tests:
+```powershell
+# Run all tests without GUI
+pytest -v
+
+# Run specific tests with GUI visualization
+pytest tests/test_bounding_box_detector.py -v --showgui
+
+# Run tests with coverage report
+pytest -v --cov=src
+```
+
+Test data will be saved to `data/test_sequences/three_sectors.pkl`. This synthetic data simulates three moving objects in different sectors for testing the detection algorithms.
 
 ### Git LFS Setup
 Large files (like .bag recordings) are managed with Git LFS:

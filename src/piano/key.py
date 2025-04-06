@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from typing import Optional
 
 
 # Add these constants at the top with other constants
@@ -106,17 +107,35 @@ def get_frequency_from_distance(min_distance_m):
     return notes[index]
 
 @dataclass
+class AngularBounds:
+    min_azimuth: float  # degrees, negative is left of center
+    max_azimuth: float  # degrees
+    min_elevation: float = -5.0  # degrees, fixed small range
+    max_elevation: float = 5.0   # degrees
+    min_range: float = 0.3       # meters
+    max_range: float = 4.0       # meters
+
+@dataclass
 class Key:
     """Represents a virtual piano key in 3D space."""
     name: str
     color: tuple[int, int, int]
-    bounds: tuple[tuple[float, float, float], tuple[float, float, float]]  # ((min_x, min_y, min_z), (max_x, max_y, max_z))
+    angular_bounds: AngularBounds
     
     def get_frequency(self, distance: float, valid_points: int) -> float:
         """Calculate frequency based on the minimum distance if enough valid points."""
         return get_frequency_from_distance(distance) if valid_points > 10 else 0
     
-    def get_note(self, distance: float, valid_points: int) -> str:
-        """Get the musical note name based on the distance if enough valid points."""
-        freq = self.get_frequency(distance, valid_points)
-        return get_note_from_frequency(freq) if freq > 0 else ""
+    def get_note(self, distance_m: float) -> Optional[str]:
+        """Convert distance to musical note."""
+        if not self.angular_bounds.min_range <= distance_m <= self.angular_bounds.max_range:
+            return None
+            
+        if distance_m < 1.0:
+            return "C4"
+        elif distance_m < 2.0:
+            return "E4"
+        elif distance_m < 3.0:
+            return "G4"
+        else:
+            return "C5"
