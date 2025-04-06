@@ -1,0 +1,11 @@
+version: '3'
+services:
+  piano:
+    build: .
+    volumes:
+      - /dev/video0:/dev/video0  # For RealSense camera access
+    devices:
+      - /dev/video0:/dev/video0  # For RealSense camera access
+    environment:
+      - DISPLAY=${DISPLAY}  # For GUI output
+    network_mode: host  # For GUI output
