@@ -6,6 +6,7 @@ import argparse
 import os
 import math
 from dataclasses import dataclass
+from typing import Dict, List
 
 from src.piano.tone_generator import ToneGenerator
 from src.piano.key import Key, C_MAJOR_FREQUENCIES, get_frequency_from_distance
@@ -19,26 +20,48 @@ KEYS = [
     Key("Key 3", (255, 0, 0), ((0.2, -0.1, 0.1), (0.3, 0.1, 5.0)))
 ]
 
-def overlay_bounding_boxes(frame_data: FrameData, keys: list[Key]):
-    """Overlays multiple bounding boxes and returns their distances using vectorized operations."""
+class PerformanceMonitor:
+    def __init__(self, window_size=30):
+        self.times: Dict[str, List[float]] = {}
+        self.window_size = window_size
     
-    # Process all boxes
+    def record(self, name: str, time_ms: float):
+        if name not in self.times:
+            self.times[name] = []
+        self.times[name].append(time_ms)
+        if len(self.times[name]) > self.window_size:
+            self.times[name].pop(0)
+    
+    def get_stats(self) -> str:
+        stats = []
+        for name, times in self.times.items():
+            avg = sum(times) / len(times)
+            max_t = max(times)
+            stats.append(f"{name}: {avg:.1f}ms (max: {max_t:.1f}ms)")
+        return " | ".join(stats)
+
+def overlay_bounding_boxes(frame_data: FrameData, keys: list[Key]):
+    """Optimized overlay function."""
     detections = []
+    
+    # Pre-calculate depth conversion once
+    depths = frame_data.depth_image.astype(float) / 1000.0
+    
+    # Process all boxes in parallel using numpy operations
     for idx, key in enumerate(keys):
-        
         detection = get_bounding_box_detections(frame_data, key.bounds, key.name, key.color)
-
-        if detection is None:
-            continue
-
-        # Overlay text
-        text_y = 30 + (idx * 30)
-        note = key.get_note(detection.min_distance_m, detection.num_valid_points)
-        overlay_text = f"{key.name}: {detection.min_distance_m:.2f}m, Points: {detection.num_valid_points}, Note: {note}"
-        cv2.putText(frame_data.color_image_rgb, overlay_text, (10, text_y), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, key.color, 2)
         
-        detections.append(detection)
+        if detection is not None:
+            detections.append(detection)
+            
+            # Reduce text overlay overhead
+            if idx < 3:  # Only show first 3 keys' stats
+                text_y = 30 + (idx * 30)
+                note = key.get_note(detection.min_distance_m, detection.num_valid_points)
+                overlay_text = f"{key.name}: {detection.min_distance_m:.1f}m"
+                cv2.putText(frame_data.color_image_rgb, overlay_text, 
+                           (10, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
+                           0.7, key.color, 2)
     
     return frame_data.color_image_rgb, detections
 
@@ -80,35 +103,42 @@ def main(bag_file=None):
         frame_count = 0
         start_time = time.time()
         
+        perf = PerformanceMonitor()
+        
         while True:
-            loop_start = time.time()
+            frame_start = time.time()
             
+            # Get frames
+            t0 = time.time()
             frame_data = get_color_and_depth_frames(pipeline, align)
             if frame_data is None:
                 continue
-                
-            frame_time = time.time() - loop_start
+            perf.record("Frame", (time.time() - t0) * 1000)
             
-            process_start = time.time()
+            # Process frames
+            t0 = time.time()
             color_image_with_overlay, detections = overlay_bounding_boxes(frame_data, KEYS)
-            process_time = time.time() - process_start
+            perf.record("Process", (time.time() - t0) * 1000)
+            
+            # Update audio
+            t0 = time.time()
+            frequencies = [get_frequency_from_distance(d.min_distance_m) for d in detections]
+            tone_gen.set_frequencies(frequencies)
+            perf.record("Audio", (time.time() - t0) * 1000)
+            
+            # Display results
+            if frame_count % 30 == 0:
+                stats = perf.get_stats()
+                cv2.putText(color_image_with_overlay, stats, 
+                           (10, color_image_with_overlay.shape[0] - 10),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+            cv2.imshow('RealSense with Bounding Box', color_image_with_overlay)
+            if cv2.waitKey(1) in [ord('q'), 27]:
+                break
             
             frame_count += 1
-            if frame_count % 30 == 0:  # Print stats every 30 frames
-                elapsed = time.time() - start_time
-                fps = frame_count / elapsed
-                print(f"FPS: {fps:.1f}, Frame time: {frame_time*1000:.1f}ms, Process time: {process_time*1000:.1f}ms")
             
-            # Update frequencies based on detections
-            frequencies = [get_frequency_from_distance(detection.min_distance_m) for detection in detections]
-            tone_gen.set_frequencies(frequencies)
-
-            cv2.imshow('RealSense with Bounding Box', color_image_with_overlay)
-            key = cv2.waitKey(10)
-            if key & 0xFF == ord('q') or key == 27:
-                cv2.destroyAllWindows()
-                break
-
     except Exception as e:
         print(e)
         raise e

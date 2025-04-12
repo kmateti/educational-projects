@@ -86,11 +86,8 @@ def get_note_from_frequency(frequency: float, tolerance: float = 1.0) -> str:
 
 # C pentatonic scale (one octave)
 C_PENTATONIC_FREQUENCIES = {
-    'C4': 261.63,  # Middle C
-    'D4': 293.66,
-    'E4': 329.63,
-    'G4': 392.00,
-    'A4': 440.00
+    note: C_MAJOR_FREQUENCIES[note]
+    for note in ['C3', 'D3', 'E3', 'G3', 'A3','C4']
 }
 
 # Calculate section size for 5 notes
@@ -101,11 +98,11 @@ section_size = range_size / 5
 
 # Map distance ranges to notes (closer = higher pitch)
 ranges = [
-    (max_range - section_size, max_range, 'C4'),      # Furthest = lowest note
-    (max_range - 2*section_size, max_range - section_size, 'D4'),
-    (max_range - 3*section_size, max_range - 2*section_size, 'E4'),
-    (max_range - 4*section_size, max_range - 3*section_size, 'G4'),
-    (min_range, max_range - 4*section_size, 'A4')     # Closest = highest note
+    (max_range - section_size, max_range, 'C3'),      # Furthest = lowest note
+    (max_range - 2*section_size, max_range - section_size, 'D3'),
+    (max_range - 3*section_size, max_range - 2*section_size, 'E3'),
+    (max_range - 4*section_size, max_range - 3*section_size, 'G3'),
+    (min_range, max_range - 4*section_size, 'A3')     # Closest = highest note
 ]
 
 def get_frequency_from_distance(min_distance_m: float, 
