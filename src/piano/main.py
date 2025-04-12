@@ -8,15 +8,27 @@ import math
 from dataclasses import dataclass
 
 from src.piano.tone_generator import ToneGenerator
-from src.piano.key import Key, AngularBounds, C_MAJOR_FREQUENCIES, get_frequency_from_distance
 from src.detectors.bounding_box_detector import get_angular_detection
 from src.io.frames import get_color_and_depth_frames, FrameData
+from src.piano.channel import Channel, AngularBounds
 
-# Initialize keys with angular bounds
-KEYS = [
-    Key("Left", (0, 0, 255), AngularBounds(-30, -10)),
-    Key("Center", (0, 255, 0), AngularBounds(-10, 10)),
-    Key("Right", (255, 0, 0), AngularBounds(10, 30))
+# Calculate sector size: 86° / 9 ≈ 9.56° per sector
+SECTOR_WIDTH = 86 / 9
+
+# Initialize channels with different base frequencies
+CHANNELS = [
+    Channel("Far Left", (0, 0, 255), 
+            AngularBounds(-43 + SECTOR_WIDTH, -43 + 2*SECTOR_WIDTH),
+            440.0),  # A4
+    Channel("Left", (0, 255, 0),
+            AngularBounds(-43 + 3*SECTOR_WIDTH, -43 + 4*SECTOR_WIDTH),
+            329.63), # E4
+    Channel("Right", (255, 0, 0),
+            AngularBounds(-43 + 5*SECTOR_WIDTH, -43 + 6*SECTOR_WIDTH),
+            261.63), # C4
+    Channel("Far Right", (255, 0, 255),
+            AngularBounds(-43 + 7*SECTOR_WIDTH, -43 + 8*SECTOR_WIDTH),
+            196.00)  # G3
 ]
 
 def overlay_bounding_boxes(frame_data: FrameData, keys: list[Key]):
@@ -35,7 +47,7 @@ def overlay_bounding_boxes(frame_data: FrameData, keys: list[Key]):
         text = f"{key.name}: {detection.min_distance_m:.2f}m, Az: {detection.azimuth_deg:.1f}°"
         if note:
             text += f" Note: {note}"
-            
+                
         cv2.putText(
             frame_data.color_image_rgb, 
             text,
@@ -98,15 +110,15 @@ def main(bag_file=None):
             frame_time = time.time() - loop_start
             
             process_start = time.time()
-            color_image_with_overlay, detections = overlay_bounding_boxes(frame_data, KEYS)
+            color_image_with_overlay, detections = overlay_bounding_boxes(frame_data, CHANNELS)
             process_time = time.time() - process_start
-            
+                        
             frame_count += 1
             if frame_count % 30 == 0:  # Print stats every 30 frames
                 elapsed = time.time() - start_time
                 fps = frame_count / elapsed
                 print(f"FPS: {fps:.1f}, Frame time: {frame_time*1000:.1f}ms, Process time: {process_time*1000:.1f}ms")
-            
+                        
             # Update frequencies based on detections
             frequencies = [get_frequency_from_distance(detection.min_distance_m) for detection in detections]
             tone_gen.set_frequencies(frequencies)

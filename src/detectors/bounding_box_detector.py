@@ -7,7 +7,6 @@ from math import degrees, atan2, sqrt
 from typing import Optional
 
 from src.io.frames import FrameData
-from src.piano.key import AngularBounds
 
 MAX_RANGE_M = 4.0  # Maximum range for the bounding box in meters
 

@@ -27,5 +27,11 @@ packages = ["src"]
 allow-direct-references = true
 
 [tool.pytest.ini_options]
-addopts = "-ra -q"
+addopts = "-v"
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "manual: tests that require human verification"
+]

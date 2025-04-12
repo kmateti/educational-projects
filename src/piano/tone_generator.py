@@ -1,66 +1,57 @@
 import numpy as np
 import pyaudio
 import threading
-from queue import Queue
-from typing import Optional, List
-
-SAMPLE_RATE = 44100
-CHUNK_SIZE = 1024
-FORMAT = pyaudio.paFloat32
+from typing import List
+from src.piano.notes import Note, get_frequency
 
 class ToneGenerator:
-    def __init__(self):
-        self.stream: Optional[pyaudio.Stream] = None
-        self.p: Optional[pyaudio.PyAudio] = None
-        self.num_frequencies: int = 3  # Number of frequencies to mix
-        self.frequencies: List[float] = [0, 0, 0]  # Three frequencies
-        self.running = False
-        self.freq_queue = Queue()
-
-    def _generate_chunk(self) -> np.ndarray:
-        samples = np.arange(CHUNK_SIZE)
-        # Mix three sine waves with different amplitudes
-        tone = np.zeros(CHUNK_SIZE)
-        for i, freq in enumerate(self.frequencies):
-            if freq > 0:
-                # Decrease amplitude for each additional frequency to prevent clipping
-                amplitude = (1.0 / self.num_frequencies) / (i + 1)
-                tone += amplitude * np.sin(2 * np.pi * freq * samples / SAMPLE_RATE)
-        return tone.astype(np.float32)
-
-    def _audio_thread(self):
-        self.p = pyaudio.PyAudio()
-        self.stream = self.p.open(
-            format=FORMAT,
-            channels=1,
-            rate=SAMPLE_RATE,
-            output=True,
-            frames_per_buffer=CHUNK_SIZE
-        )
-
-        while self.running:
-            # Update frequencies if new values available
-            while not self.freq_queue.empty():
-                self.frequencies = self.freq_queue.get()
+    def __init__(self, sample_rate=44100):
+        self.sample_rate = sample_rate
+        self.notes: List[Note] = []
+        self.stream = None
+        self.is_running = False
+        self.pa = pyaudio.PyAudio()
+    
+    def audio_callback(self, in_data, frame_count, time_info, status):
+        """Generate audio samples."""
+        if not self.notes:
+            return (np.zeros(frame_count).astype(np.float32), pyaudio.paContinue)
+        
+        t = np.arange(frame_count) / self.sample_rate
+        
+        # Mix all active notes
+        samples = np.zeros(frame_count)
+        for note in self.notes:
+            freq = get_frequency(note)
+            samples += np.sin(2 * np.pi * freq * t)
+        
+        # Normalize
+        if len(self.notes) > 0:
+            samples = samples / len(self.notes)
             
-            if any(f > 0 for f in self.frequencies):
-                chunk = self._generate_chunk()
-                self.stream.write(chunk.tobytes())
-
+        return (samples.astype(np.float32), pyaudio.paContinue)
+    
+    def start(self):
+        """Start audio stream."""
+        self.stream = self.pa.open(
+            format=pyaudio.paFloat32,
+            channels=1,
+            rate=self.sample_rate,
+            output=True,
+            stream_callback=self.audio_callback,
+            frames_per_buffer=1024
+        )
+        self.stream.start_stream()
+        self.is_running = True
+    
+    def stop(self):
+        """Stop audio stream."""
         if self.stream:
             self.stream.stop_stream()
             self.stream.close()
-        if self.p:
-            self.p.terminate()
-
-    def start(self):
-        self.running = True
-        threading.Thread(target=self._audio_thread, daemon=True).start()
-
-    def stop(self):
-        self.running = False
-        self.frequencies = [0, 0, 0]
-
-    def set_frequencies(self, freqs: List[float]):
-        """Set up to three frequencies to play simultaneously"""
-        self.freq_queue.put(freqs[:self.num_frequencies])  # Limit to three frequencies
+        self.is_running = False
+        self.pa.terminate()
+    
+    def set_notes(self, notes: List[Note]):
+        """Update notes being played."""
+        self.notes = notes

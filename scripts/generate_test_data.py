@@ -7,32 +7,33 @@ from src.testing.frame_utils import SimulatedFrame
 from src.io.camera_models import CameraIntrinsics
 
 def create_synthetic_scene(width: int = 640, height: int = 480, frame_idx: int = 0):
-    """Create synthetic depth and color images with moving objects."""
+    """Create synthetic depth and color images with four moving objects."""
     
     # Create empty depth image (4000mm = 4.0m background)
     depth_image = np.full((height, width), 4000, dtype=np.uint16)
     color_image = np.zeros((height, width, 3), dtype=np.uint8)
     
-    # Create three vertical sectors
-    sector_width = width // 3
+    # Calculate sector positions (9 sectors, use sectors 1,3,5,7)
+    sector_width = width // 9
+    key_sectors = [1, 3, 5, 7]  # Sectors for the four keys
     
-    # Animate objects in each sector based on frame index
+    # Animate objects in each key sector based on frame index
     t = frame_idx / 30.0  # Assuming 30fps
-    for i in range(3):
+    for i, sector in enumerate(key_sectors):
         # Oscillating distance between 0.5m and 3.5m
-        distance = 2000 + 1500 * np.sin(t + i * 2 * np.pi / 3)  # in mm
+        distance = 2000 + 1500 * np.sin(t + i * np.pi / 2)  # in mm
         
         # Create object in sector
-        x_center = (i + 0.5) * sector_width
+        x_center = (sector + 0.5) * sector_width
         y_center = height // 2
         
         # Create circular object
         y, x = np.ogrid[:height, :width]
-        mask = ((x - x_center) ** 2 + (y - y_center) ** 2) < 1000
+        mask = ((x - x_center) ** 2 + (y - y_center) ** 2) < 800
         depth_image[mask] = distance
         
-        # Add color
-        colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0)]
+        # Add color (BGR format)
+        colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0), (255, 0, 255)]  # Far left, left, right, far right
         color_image[mask] = colors[i]
     
     intrinsics = CameraIntrinsics(
@@ -79,4 +80,4 @@ def generate_test_sequence(output_path: Path, num_frames: int = 300, show_gui: b
 
 if __name__ == "__main__":
     output_dir = Path(__file__).parent.parent / "data" / "test_sequences"
-    generate_test_sequence(output_dir / "three_sectors.pkl")
+    generate_test_sequence(output_dir / "four_sectors.pkl")
