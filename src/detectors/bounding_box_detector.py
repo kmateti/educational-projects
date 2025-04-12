@@ -37,11 +37,11 @@ def get_bounding_box_detections(frame_data: FrameData, bounds, name, color):
         pixel = rs.rs2_project_point_to_pixel(frame_data.depth_intrinsics, [x, y, z])
         corners_2d.append((int(pixel[0]), int(pixel[1])))
     projection_time = time.time() - tic
-    # # Draw box
-    # for i in range(len(corners_2d)):
-    #     pt1 = corners_2d[i]
-    #     pt2 = corners_2d[(i + 1) % len(corners_2d)]
-    #     cv2.line(frame_data.color_image_rgb, pt1, pt2, color, 2)
+    # Draw box
+    for i in range(len(corners_2d)):
+        pt1 = corners_2d[i]
+        pt2 = corners_2d[(i + 1) % len(corners_2d)]
+        cv2.line(frame_data.color_image_rgb, pt1, pt2, color, 2)
     
     # Calculate points and distance inside box
     X = (px - frame_data.depth_intrinsics.ppx) * depths / frame_data.depth_intrinsics.fx

@@ -57,7 +57,6 @@ C_MAJOR_FREQUENCIES = {
     'C8': 4186.01  # Highest note on a piano
 }
 
-
 MAX_RANGE_M = 4.0  # Maximum range for the bounding box in meters
 
 def get_note_from_distance(min_distance_m):
@@ -85,25 +84,52 @@ def get_note_from_frequency(frequency: float, tolerance: float = 1.0) -> str:
     return ""
 
 
-def get_frequency_from_distance(min_distance_m):
-    """Map distance to a note in C major scale using logarithmic scaling."""
-    # Normalize distance to 0-1 range using log scale
-    # Add small epsilon to avoid log(0)
-    epsilon = 0.001
-    log_min = math.log(epsilon)
-    log_max = math.log(MAX_RANGE_M + epsilon)
+# C pentatonic scale (one octave)
+C_PENTATONIC_FREQUENCIES = {
+    'C4': 261.63,  # Middle C
+    'D4': 293.66,
+    'E4': 329.63,
+    'G4': 392.00,
+    'A4': 440.00
+}
+
+# Calculate section size for 5 notes
+min_range = 0.5  # Minimum operating distance (closest = highest note)
+max_range = 3.5  # Maximum operating distance (furthest = lowest note)
+range_size = max_range - min_range
+section_size = range_size / 5
+
+# Map distance ranges to notes (closer = higher pitch)
+ranges = [
+    (max_range - section_size, max_range, 'C4'),      # Furthest = lowest note
+    (max_range - 2*section_size, max_range - section_size, 'D4'),
+    (max_range - 3*section_size, max_range - 2*section_size, 'E4'),
+    (max_range - 4*section_size, max_range - 3*section_size, 'G4'),
+    (min_range, max_range - 4*section_size, 'A4')     # Closest = highest note
+]
+
+def get_frequency_from_distance(min_distance_m: float, 
+                              min_range: float = 0.5, 
+                              max_range: float = 3.5) -> float:
+    """Map distance to a note in C pentatonic scale with configurable range.
     
-    # Calculate normalized position in log space
-    log_dist = math.log(min_distance_m + epsilon)
-    normalized_dist = (log_dist - log_min) / (log_max - log_min)
-    normalized_dist = max(0, min(1, normalized_dist))
+    Args:
+        min_distance_m: Distance in meters
+        min_range: Minimum operating distance (closest = highest note)
+        max_range: Maximum operating distance (furthest = lowest note)
+        
+    Returns:
+        float: Frequency of the corresponding note
+    """
+    if min_distance_m < min_range or min_distance_m > max_range:
+        return 0
     
-    # Map to index in C major scale
-    notes = list(C_MAJOR_FREQUENCIES.values())[::-1]  # Reverse for descending scale
-    index = int(normalized_dist * (len(notes) - 1))
+    # Find which range the distance falls into
+    for min_sect, max_sect, note in ranges:
+        if min_sect <= min_distance_m <= max_sect:
+            return C_PENTATONIC_FREQUENCIES[note]
     
-    # Return the frequency
-    return notes[index]
+    return 0
 
 @dataclass
 class Key:
