@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-
+from typing import Optional
 
 # Add these constants at the top with other constants
 # C major scale frequencies (C2 to C6)
@@ -143,3 +143,19 @@ class Key:
         """Get the musical note name based on the distance if enough valid points."""
         freq = self.get_frequency(distance, valid_points)
         return get_note_from_frequency(freq) if freq > 0 else ""
+
+@dataclass
+class AngularBounds:
+    """Defines an angular sector in camera space."""
+    azimuth_center: float  # Degrees, 0 = center, negative = left, positive = right
+    azimuth_span: float    # Degrees, total width of sector
+    elevation_span: float = 10.0  # Degrees, total height centered on 0
+    min_range: float = 0.3  # Minimum detection distance in meters
+    max_range: float = 4.0  # Maximum detection distance in meters
+
+@dataclass
+class Sector:
+    """Represents a virtual piano sector in angular space."""
+    name: str
+    color: tuple[int, int, int]
+    bounds: AngularBounds

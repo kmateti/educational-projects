@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from src.piano.tone_generator import ToneGenerator
-from src.piano.key import Key, C_MAJOR_FREQUENCIES, get_frequency_from_distance
-from src.detectors.bounding_box_detector import get_bounding_box_detections
+from src.piano.key import Key, C_MAJOR_FREQUENCIES, get_frequency_from_distance, Sector, AngularBounds
+from src.detectors.bounding_box_detector import get_angular_detection, get_bounding_box_detections, SectorDetection
 from src.io.frames import get_color_and_depth_frames, FrameData
 
 # Define boxes in camera coordinate system
@@ -27,6 +27,27 @@ KEYS = [
     Key("Key 4", (255, 0, 255), 
         ((0.5, -0.3, 0.5),
          (0.7, 0.3, 2.0)))
+]
+
+# Calculate sector size (86° FOV divided into 9 sections, using 4 sectors)
+SECTOR_WIDTH = 86 / 9  # ~9.56 degrees
+
+SECTORS = [
+    Sector("Far Left", (0, 0, 255), 
+           AngularBounds(azimuth_center=-43 + SECTOR_WIDTH, 
+                        azimuth_span=SECTOR_WIDTH*2)),
+           
+    Sector("Left", (0, 255, 0), 
+           AngularBounds(azimuth_center=-43 + 3*SECTOR_WIDTH,
+                        azimuth_span=SECTOR_WIDTH*2)),
+           
+    Sector("Right", (255, 0, 0), 
+           AngularBounds(azimuth_center=-43 + 5*SECTOR_WIDTH,
+                        azimuth_span=SECTOR_WIDTH*2)),
+           
+    Sector("Far Right", (255, 0, 255), 
+           AngularBounds(azimuth_center=-43 + 7*SECTOR_WIDTH,
+                        azimuth_span=SECTOR_WIDTH*2))
 ]
 
 class PerformanceMonitor:
@@ -64,7 +85,7 @@ def overlay_bounding_boxes(frame_data: FrameData, keys: list[Key]):
             detections.append(detection)
             
             # Reduce text overlay overhead
-            if idx < 3:  # Only show first 3 keys' stats
+            if idx < 4:  # Only show first 3 keys' stats
                 text_y = 30 + (idx * 30)
                 note = key.get_note(detection.min_distance_m, detection.num_valid_points)
                 overlay_text = f"{key.name}: {detection.min_distance_m:.1f}m"
@@ -74,6 +95,16 @@ def overlay_bounding_boxes(frame_data: FrameData, keys: list[Key]):
     
     return color_image_rgb, detections
 
+def overlay_sectors(frame_data: FrameData, sectors: list[Sector]) -> tuple[np.ndarray, list[SectorDetection]]:
+    """Overlay angular sectors and return their detections."""
+    detections = []
+    
+    for sector in sectors:
+        detection = get_angular_detection(frame_data, sector.bounds, sector.name, sector.color)
+        if detection is not None:
+            detections.append(detection)
+    
+    return frame_data.color_image_rgb, detections
 
 def main(bag_file=None):
     try:
@@ -107,8 +138,8 @@ def main(bag_file=None):
         align = rs.align(align_to)
 
         # Create tone generator
-        #tone_gen = ToneGenerator()
-        #tone_gen.start()
+        tone_gen = ToneGenerator()
+        tone_gen.start()
         frame_count = 0
         start_time = time.time()
         
@@ -124,15 +155,15 @@ def main(bag_file=None):
                 continue
             perf.record("Frame", (time.time() - t0) * 1000)
             
-            # Process frames
+            # Process frames using sectors instead of boxes
             t0 = time.time()
-            color_image_with_overlay, detections = overlay_bounding_boxes(frame_data, KEYS)
+            color_image_with_overlay, detections = overlay_sectors(frame_data, SECTORS)
             perf.record("Process", (time.time() - t0) * 1000)
             
             # Update audio
             t0 = time.time()
             frequencies = [get_frequency_from_distance(d.min_distance_m) for d in detections]
-            #tone_gen.set_frequencies(frequencies)
+            tone_gen.set_frequencies(frequencies)
             perf.record("Audio", (time.time() - t0) * 1000)
             
             # Display results
