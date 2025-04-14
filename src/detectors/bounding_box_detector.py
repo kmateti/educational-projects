@@ -16,51 +16,79 @@ class BoxDetection:
     box_name: str
 
 def get_bounding_box_detections(frame_data: FrameData, bounds, name, color):
-    tic = time.time()
-    height, width  = frame_data.depth_image.shape
-    px, py = np.meshgrid(np.arange(width), np.arange(height))
+    """Get detections using aligned depth frame coordinates."""
+
+    height, width = frame_data.depth_image.shape
     depths = frame_data.depth_image.astype(float) / 1000.0  # Convert to meters
 
     x_min, y_min, z_min = bounds[0]
     x_max, y_max, z_max = bounds[1]
-        
-    # Project 3D corners to 2D image space
+    
+    # Use camera intrinsics for proper projection
+    fx = frame_data.depth_intrinsics.fx
+    fy = frame_data.depth_intrinsics.fy
+    ppx = frame_data.depth_intrinsics.ppx
+    ppy = frame_data.depth_intrinsics.ppy
+    
     corners_3d = [
-        (x_min, y_min, z_min),  # Front bottom left
-        (x_max, y_min, z_min),  # Front bottom right
-        (x_max, y_max, z_min),  # Front top right
-        (x_min, y_max, z_min),  # Front top left
+        # Front face (z = z_min)
+        (x_min, y_min, z_min),
+        (x_max, y_min, z_min),
+        (x_max, y_max, z_min),
+        (x_min, y_max, z_min),
+        # Back face (z = z_max)
+        (x_min, y_min, z_max),
+        (x_max, y_min, z_max),
+        (x_max, y_max, z_max),
+        (x_min, y_max, z_max),
     ]
     
     corners_2d = []
     for x, y, z in corners_3d:
-        pixel = rs.rs2_project_point_to_pixel(frame_data.depth_intrinsics, [x, y, z])
-        corners_2d.append((int(pixel[0]), int(pixel[1])))
-    projection_time = time.time() - tic
-    # Draw box
-    for i in range(len(corners_2d)):
-        pt1 = corners_2d[i]
-        pt2 = corners_2d[(i + 1) % len(corners_2d)]
-        cv2.line(frame_data.color_image_rgb, pt1, pt2, color, 2)
+        if z > 0:  # Avoid division by zero
+            # Project using intrinsics
+            pixel_x = int(x * fx / z + ppx)
+            pixel_y = int(y * fy / z + ppy)
+            if 0 <= pixel_x < width and 0 <= pixel_y < height:
+                corners_2d.append((pixel_x, pixel_y))
+                cv2.circle(frame_data.color_image_rgb, (pixel_x, pixel_y), 3, color, -1)
     
-    # Calculate points and distance inside box
-    X = (px - frame_data.depth_intrinsics.ppx) * depths / frame_data.depth_intrinsics.fx
-    Y = (py - frame_data.depth_intrinsics.ppy) * depths / frame_data.depth_intrinsics.fy
-    Z = depths
+    # Draw box if we have enough corners
+    if len(corners_2d) >= 4:
+        # Draw front face
+        for i in range(4):
+            pt1 = corners_2d[i]
+            pt2 = corners_2d[(i + 1) % 4]
+            cv2.line(frame_data.color_image_rgb, pt1, pt2, color, 2)
+        
+        # Draw back face (if visible)
+        if len(corners_2d) >= 8:
+            for i in range(4):
+                pt1 = corners_2d[i + 4]
+                pt2 = corners_2d[((i + 1) % 4) + 4]
+                cv2.line(frame_data.color_image_rgb, pt1, pt2, 
+                        (color[0]//2, color[1]//2, color[2]//2), 1)
+            
+            # Draw connecting edges
+            for i in range(4):
+                pt1 = corners_2d[i]
+                pt2 = corners_2d[i + 4]
+                cv2.line(frame_data.color_image_rgb, pt1, pt2, color, 1)
     
-    valid_mask = (depths > 0) & (X >= x_min) & (X <= x_max) & \
-                (Y >= y_min) & (Y <= y_max) & \
-                (Z >= z_min) & (Z <= z_max)
+    # Calculate points inside box
+    px, py = np.meshgrid(np.arange(width), np.arange(height))
+    valid_mask = (depths > 0) & \
+                (px >= ppx + (x_min/z_min)*fx) & \
+                (px <= ppx + (x_max/z_min)*fx) & \
+                (py >= ppy + (y_min/z_min)*fy) & \
+                (py <= ppy + (y_max/z_min)*fy) & \
+                (depths >= z_min) & (depths <= z_max)
     
     min_distance_m = np.min(depths[valid_mask]) if np.any(valid_mask) else MAX_RANGE_M
     num_valid_points = np.count_nonzero(valid_mask)
     
-    detection = BoxDetection(
+    return BoxDetection(
         num_valid_points=num_valid_points,
         min_distance_m=min_distance_m,
         box_name=name
-    )
-
-    detection_time = time.time() - projection_time
-    #print(f"{projection_time=}, {detection_time=}")
-    return detection
+    ), frame_data.color_image_rgb

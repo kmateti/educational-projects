@@ -20,15 +20,17 @@ def get_color_and_depth_frames(pipeline, align) -> FrameData:
     """
     frames = pipeline.wait_for_frames()
     aligned_frames = align.process(frames)
-    depth_frame = aligned_frames.get_depth_frame()
-    depth_intrinsics = depth_frame.profile.as_video_stream_profile().intrinsics
+    aligned_depth_frame = aligned_frames.get_depth_frame()
+    #depth_intrinsics = depth_frame.profile.as_video_stream_profile().intrinsics
+    # Get intrinsics from aligned depth frame
+    depth_intrinsics = aligned_depth_frame.profile.as_video_stream_profile().get_intrinsics()
     color_frame = aligned_frames.get_color_frame()
 
-    if not depth_frame or not color_frame:
+    if not aligned_depth_frame or not color_frame:
         return None
 
     color_image = np.asanyarray(color_frame.get_data())
-    depth_image = np.asanyarray(depth_frame.get_data())
+    depth_image = np.asanyarray(aligned_depth_frame.get_data())
 
     depth_colormap = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
     depth_colormap_image = cv2.applyColorMap(depth_colormap, cv2.COLORMAP_JET)

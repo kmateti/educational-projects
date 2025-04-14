@@ -13,11 +13,20 @@ from src.piano.key import Key, C_MAJOR_FREQUENCIES, get_frequency_from_distance
 from src.detectors.bounding_box_detector import get_bounding_box_detections
 from src.io.frames import get_color_and_depth_frames, FrameData
 
-# Then replace the individual constants with a list of Keys:
+# Define boxes in camera coordinate system
 KEYS = [
-    Key("Key 1", (0, 0, 255), ((-0.3, -0.1, 0.1), (-0.2, 0.1, 5.0))),
-    Key("Key 2", (0, 255, 0), ((-0.1, -0.1, 0.1), (0.1, 0.1, 5.0))),
-    Key("Key 3", (255, 0, 0), ((0.2, -0.1, 0.1), (0.3, 0.1, 5.0)))
+    Key("Key 1", (0, 0, 255), 
+        ((-0.4, -0.3, 0.5),   # min bounds (x, y, z)
+         (-0.2, 0.3, 2.0))),  # max bounds
+    Key("Key 2", (0, 255, 0), 
+        ((-0.1, -0.3, 0.5),
+         (0.1, 0.3, 2.0))),
+    Key("Key 3", (255, 0, 0), 
+        ((0.2, -0.3, 0.5),
+         (0.4, 0.3, 2.0))),
+    Key("Key 4", (255, 0, 255), 
+        ((0.5, -0.3, 0.5),
+         (0.7, 0.3, 2.0)))
 ]
 
 class PerformanceMonitor:
@@ -49,7 +58,7 @@ def overlay_bounding_boxes(frame_data: FrameData, keys: list[Key]):
     
     # Process all boxes in parallel using numpy operations
     for idx, key in enumerate(keys):
-        detection = get_bounding_box_detections(frame_data, key.bounds, key.name, key.color)
+        detection, color_image_rgb = get_bounding_box_detections(frame_data, key.bounds, key.name, key.color)
         
         if detection is not None:
             detections.append(detection)
@@ -59,11 +68,11 @@ def overlay_bounding_boxes(frame_data: FrameData, keys: list[Key]):
                 text_y = 30 + (idx * 30)
                 note = key.get_note(detection.min_distance_m, detection.num_valid_points)
                 overlay_text = f"{key.name}: {detection.min_distance_m:.1f}m"
-                cv2.putText(frame_data.color_image_rgb, overlay_text, 
+                cv2.putText(color_image_rgb, overlay_text, 
                            (10, text_y), cv2.FONT_HERSHEY_SIMPLEX, 
                            0.7, key.color, 2)
     
-    return frame_data.color_image_rgb, detections
+    return color_image_rgb, detections
 
 
 def main(bag_file=None):
@@ -98,8 +107,8 @@ def main(bag_file=None):
         align = rs.align(align_to)
 
         # Create tone generator
-        tone_gen = ToneGenerator()
-        tone_gen.start()
+        #tone_gen = ToneGenerator()
+        #tone_gen.start()
         frame_count = 0
         start_time = time.time()
         
@@ -123,7 +132,7 @@ def main(bag_file=None):
             # Update audio
             t0 = time.time()
             frequencies = [get_frequency_from_distance(d.min_distance_m) for d in detections]
-            tone_gen.set_frequencies(frequencies)
+            #tone_gen.set_frequencies(frequencies)
             perf.record("Audio", (time.time() - t0) * 1000)
             
             # Display results
