@@ -1,0 +1,61 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": true
+        },
+        {
+            "name": "no-object",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/piano/main.py",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "--bag",
+                "data/no-object.bag"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "yes-object",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/piano/main.py",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "--bag",
+                "data/yes-object.bag"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "live",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/piano/main.py",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "justMyCode": true
+        }
+    ]
+}

@@ -1,0 +1,7 @@
+*.pyc
+
+# Python virtual environment
+.venv/
+*.bag
+*.pkl
+*.egg-info
