@@ -31,6 +31,7 @@ class SectorDetection:
     min_distance_m: float
     num_valid_points: int
     azimuth_deg: float
+    valid_mask: np.ndarray  # Mask of valid points in the sector
 
 def get_angular_detection(frame_data: FrameData, bounds: AngularBounds, name: str, color: tuple[int, int, int]) -> Optional[SectorDetection]:
     """Detect points within an angular sector."""
@@ -86,5 +87,6 @@ def get_angular_detection(frame_data: FrameData, bounds: AngularBounds, name: st
     return SectorDetection(
         min_distance_m=min_distance,
         num_valid_points=np.count_nonzero(valid_mask),
-        azimuth_deg=bounds.azimuth_center
+        azimuth_deg=bounds.azimuth_center,
+        valid_mask=valid_mask
     )

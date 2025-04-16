@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from src.piano.tone_generator import ToneGenerator
-from src.piano.voices import get_frequency_from_distance
+from src.piano.voices import get_frequency_from_distance, get_note_from_distance
 from src.detectors.angular_detector import Sector, AngularBounds, get_angular_detection, SectorDetection
 from src.io.frames import get_color_and_depth_frames, FrameData
 
@@ -37,13 +37,48 @@ SECTORS = [
 def overlay_sectors(frame_data: FrameData, sectors: list[Sector]) -> tuple[np.ndarray, list[SectorDetection]]:
     """Overlay angular sectors and return their detections."""
     detections = []
+    color_image = frame_data.color_image_rgb.copy()
+    blended = color_image.copy()
+    
+    # Convert depth colormap to RGB once
+    depth_rgb = cv2.cvtColor(frame_data.depth_colormap_image, cv2.COLOR_BGR2RGB)
     
     for sector in sectors:
         detection = get_angular_detection(frame_data, sector.bounds, sector.name, sector.color)
         if detection is not None:
+            # Get note for current distance
+            note = get_note_from_distance(detection.min_distance_m)
+            
+            # Create mask for this sector's angular bounds
+            valid_mask = detection.valid_mask
+            
+            # Apply depth overlay only within valid mask
+            alpha = 0.4
+            depth_section = np.zeros_like(color_image)
+            depth_section[valid_mask] = depth_rgb[valid_mask]
+            cv2.addWeighted(blended, 1.0, depth_section, alpha, 0, blended)
+            
+            # Calculate text position
+            img_width = frame_data.color_image_rgb.shape[1]
+            angle_range = 86  # Total FOV
+            x_pos = int((detection.azimuth_deg + 43) * img_width / angle_range)
+            
+            # Add text overlays
+            text = f"{sector.name}: {detection.min_distance_m:.1f}m"
+            cv2.putText(blended, text,
+                       (x_pos, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX,
+                       0.7, sector.color, 2)
+            
+            # Add note below distance
+            cv2.putText(blended, f"Note: {note}",
+                       (x_pos, 60),
+                       cv2.FONT_HERSHEY_SIMPLEX,
+                       0.7, sector.color, 2)
+            
             detections.append(detection)
     
-    return frame_data.color_image_rgb, detections
+    return blended, detections
 
 def main(bag_file=None):
     try:
