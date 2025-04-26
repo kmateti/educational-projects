@@ -1,9 +1,49 @@
-# Configuration for the distance-to-note mapper in the piano project
-distance_to_note_mapper:
-  # Define the minimum and maximum range for distances, meters
-  min_range: 0.5
-  max_range: 2.8
-
-  # Define the lowest and highest notes corresponding to the range
-  lowest_note: 'C3'
-  highest_note: 'C4'
+sectors:
+  - name: "Bass (Far Left)"
+    color: [0, 0, 255]
+    ray:
+      azimuth_center: -35.0
+      azimuth_span: 5.0
+      elevation_center: -10
+      elevation_span: 10
+    note_mapper:
+      min_range: 0.5
+      max_range: 2.8
+      lowest_note: 'C2'
+      highest_note: 'C3'
+  - name: "Tenor (Center Left)"
+    color: [0, 255, 0]
+    ray:
+      azimuth_center: -15.0
+      azimuth_span: 5.0
+      elevation_center: -10
+      elevation_span: 10
+    note_mapper:
+      min_range: 0.5
+      max_range: 2.8
+      lowest_note: 'G2'
+      highest_note: 'G3'
+  - name: "Alto (Center Right)"
+    color: [255, 0, 0]
+    ray:
+      azimuth_center: 15
+      azimuth_span: 5.0
+      elevation_center: -10
+      elevation_span: 10
+    note_mapper:
+      min_range: 0.5
+      max_range: 2.8
+      lowest_note: 'E3'
+      highest_note: 'E4'
+  - name: "Soprano (Far Right)"
+    color: [255, 0, 255]
+    ray:
+      azimuth_center: 35.0
+      azimuth_span: 5.0
+      elevation_center: -10
+      elevation_span: 10
+    note_mapper:
+      min_range: 0.5
+      max_range: 2.8
+      lowest_note: 'C4'
+      highest_note: 'C5'

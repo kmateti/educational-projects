@@ -1,7 +1,5 @@
 import math
 from dataclasses import dataclass
-from typing import Optional
-import json
 import yaml
 
 # Add these constants at the top with other constants
@@ -71,76 +69,87 @@ C_PENTATONIC_FREQUENCIES = {
     for note in ['C3', 'D3', 'E3', 'G3', 'A3','C4']
 }
 
-class DistanceToNoteMapper:
-    def __init__(self, config_path: Optional[str] = None, min_range: float = 0.5, max_range: float = 3.5, lowest_note: str = 'A3', highest_note: str = 'C3'):
-        self.min_range = min_range
-        self.max_range = max_range
-        self.lowest_note = lowest_note
-        self.highest_note = highest_note
+@dataclass
+class RayConfig:
+    azimuth_center: float
+    azimuth_span: float
+    elevation_center: float
+    elevation_span: float
+
+@dataclass
+class NoteMapperConfig:
+    min_range: float = 0.5
+    max_range: float = 3.5
+    lowest_note: str = 'C3'
+    highest_note: str = 'C4'
+
+@dataclass
+class SectorConfig:
+    name: str
+    ray: RayConfig
+    note_mapper: NoteMapperConfig
+
+class SectorDistanceToNoteMapper:
+    def __init__(self, note_mapper_config: NoteMapperConfig):
+        self.min_range = note_mapper_config.min_range
+        self.max_range = note_mapper_config.max_range
+        self.lowest_note = note_mapper_config.lowest_note
+        self.highest_note = note_mapper_config.highest_note
         self.ranges = []
-        if config_path:
-            self.load_config(config_path)
-        
         self._calculate_ranges()
 
     def _calculate_ranges(self):
-        """Calculate ranges for mapping distances to notes based on lowest and highest notes."""
-        notes = list(C3_C4_FREQUENCIES.keys())
+        # Create a list of notes from the global C_MAJOR_FREQUENCIES dictionary.
+        notes = list(C_MAJOR_FREQUENCIES.keys())
         start_index = notes.index(self.lowest_note)
         end_index = notes.index(self.highest_note) + 1
         selected_notes = notes[start_index:end_index]
-
+        
         range_size = self.max_range - self.min_range
         section_size = range_size / len(selected_notes)
         self.ranges = [
             (self.max_range - (i + 1) * section_size, self.max_range - i * section_size, note)
             for i, note in enumerate(selected_notes)
         ]
-
-    def load_config(self, config_path: str):
-        """Load configuration from a YAML file."""
-        with open(config_path, 'r') as file:
-            config = yaml.safe_load(file)
-
-        dist2note_config = config.get('distance_to_note_mapper')
-        assert dist2note_config, "Configuration for distance_to_note_mapper not found."
-
-        self.min_range = dist2note_config.get('min_range', 0.5)
-        self.max_range = dist2note_config.get('max_range', 3.5)
-        self.lowest_note = dist2note_config.get('lowest_note', 'A3')
-        self.highest_note = dist2note_config.get('highest_note', 'C3')
-
-    def save_config(self, config_path: str):
-        """Save the current configuration to a JSON file."""
-        config = {
-            'min_range': self.min_range,
-            'max_range': self.max_range,
-            'lowest_note': self.lowest_note,
-            'highest_note': self.highest_note,
-        }
-        with open(config_path, 'w') as file:
-            json.dump(config, file, indent=4)
-
-    def get_frequency_from_distance(self, min_distance_m: float) -> float:
-        """Map distance to a note in C pentatonic scale with configurable range."""
-        if min_distance_m < self.min_range or min_distance_m > self.max_range:
-            return 0
-
-        for min_sect, max_sect, note in self.ranges:
-            if min_sect <= min_distance_m <= max_sect:
-                return C3_C4_FREQUENCIES[note]
-
-        return 0
-
-    @staticmethod
-    def get_note_from_frequency(frequency: float, tolerance: float = 1.0) -> str:
-        """Map a frequency back to its note name."""
-        for note, freq in C_MAJOR_FREQUENCIES.items():
-            if abs(frequency - freq) / freq * 100 <= tolerance:
+        
+    def get_note_from_distance(self, distance: float) -> str:
+        """Return the note corresponding to the given distance."""
+        for d_min, d_max, note in self.ranges:
+            if d_min <= distance < d_max:
                 return note
-        return ""
+        # Return the last note if distance is beyond calculated range.
+        return self.ranges[-1][2] if self.ranges else ""
+    
+    def get_frequency_from_distance(self, distance: float) -> float:
+        """Return the frequency for the note corresponding to the given distance."""
+        note = self.get_note_from_distance(distance)
+        return C_MAJOR_FREQUENCIES.get(note, 0)
+        
+def load_sector_configs(config_path: str) -> dict[str, SectorConfig]:
+    with open(config_path, 'r') as file:
+        config = yaml.safe_load(file)
+    
+    sectors_list = config.get('sectors')
+    if not sectors_list:
+        raise ValueError("No sectors found in configuration.")
 
-    def get_note_from_distance(self, min_distance_m: float) -> str:
-        """Map distance to a note in C major scale using logarithmic scaling."""
-        frequency = self.get_frequency_from_distance(min_distance_m)
-        return self.get_note_from_frequency(frequency)
+    sector_configs = {}
+    for sec in sectors_list:
+        ray_conf = RayConfig(
+            azimuth_center=sec['angular']['azimuth_center'],  # still using 'angular' in config file
+            azimuth_span=sec['angular']['azimuth_span'],
+            elevation_center=sec['angular'].get('elevation_center', 0),
+            elevation_span=sec['angular'].get('elevation_span', 0)
+        )
+        note_mapper_conf = NoteMapperConfig(
+            min_range=sec['mapper'].get('min_range', 0.5),
+            max_range=sec['mapper'].get('max_range', 3.5),
+            lowest_note=sec['mapper'].get('lowest_note', 'C3'),
+            highest_note=sec['mapper'].get('highest_note', 'C4')
+        )
+        sector_configs[sec['name']] = SectorConfig(
+            name=sec['name'],
+            ray=ray_conf,
+            note_mapper=note_mapper_conf
+        )
+    return sector_configs

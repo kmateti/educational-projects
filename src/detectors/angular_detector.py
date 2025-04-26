@@ -7,7 +7,7 @@ from typing import Optional
 
 from src.io.frames import FrameData
 
-MAX_RANGE_M = 2.6  # Maximum range for the bounding box in meters
+MAX_RANGE_M = 3.5  # Maximum range for the bounding box in meters
 
 @dataclass
 class AngularBounds:
@@ -20,19 +20,23 @@ class AngularBounds:
     max_range: float = MAX_RANGE_M  # Maximum detection distance in meters
 
 @dataclass
-class Sector:
-    """Represents a virtual piano sector in angular space."""
-    name: str
-    color: tuple[int, int, int]
-    bounds: AngularBounds
-    
-@dataclass
 class SectorDetection:
     """Detection result for an angular sector."""
     min_distance_m: float
     num_valid_points: int
     azimuth_deg: float
     valid_mask: np.ndarray  # Mask of valid points in the sector
+
+@dataclass
+class Sector:
+    """Represents a virtual piano sector in angular space."""
+    name: str
+    color: tuple[int, int, int]
+    bounds: AngularBounds
+
+    def detect(self, frame_data: FrameData) -> Optional[SectorDetection]:
+        return get_angular_detection(frame_data, self.bounds, self.name, self.color)
+
 
 def get_angular_detection(frame_data: FrameData, bounds: AngularBounds, name: str, color: tuple[int, int, int]) -> Optional[SectorDetection]:
     """Detect points within an angular sector."""
