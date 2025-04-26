@@ -1,0 +1,9 @@
+# Configuration for the distance-to-note mapper in the piano project
+distance_to_note_mapper:
+  # Define the minimum and maximum range for distances, meters
+  min_range: 0.5
+  max_range: 2.8
+
+  # Define the lowest and highest notes corresponding to the range
+  lowest_note: 'C3'
+  highest_note: 'C4'

@@ -9,9 +9,13 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from src.piano.tone_generator import ToneGenerator
-from src.piano.voices import get_frequency_from_distance, get_note_from_distance
+from src.piano.voices import DistanceToNoteMapper
 from src.detectors.angular_detector import Sector, AngularBounds, get_angular_detection, SectorDetection
 from src.io.frames import get_color_and_depth_frames, FrameData
+
+# Distance to note mapping for C3 to C4 range
+#dist2note_mapper = DistanceToNoteMapper(min_range=0.5, max_range=2.8, lowest_note='C3', highest_note='C4')
+dist2note_mapper = DistanceToNoteMapper(config_path="src\piano\config.yaml")
 
 # Calculate sector size (86° FOV divided into 9 sections, using 4 sectors)
 SECTOR_WIDTH = 86 / 9  # ~9.56 degrees
@@ -47,7 +51,7 @@ def overlay_sectors(frame_data: FrameData, sectors: list[Sector]) -> tuple[np.nd
         detection = get_angular_detection(frame_data, sector.bounds, sector.name, sector.color)
         if detection is not None and detection.num_valid_points > NUM_POINTS:
             # Get note for current distance
-            note = get_note_from_distance(detection.min_distance_m)
+            note = dist2note_mapper.get_note_from_distance(detection.min_distance_m)
             
             # Create mask for this sector's angular bounds
             valid_mask = detection.valid_mask
@@ -137,7 +141,7 @@ def main(bag_file=None):
                     
             # Update audio
             t3 = time.time()
-            frequencies = [get_frequency_from_distance(d.min_distance_m) for d in detections]
+            frequencies = [dist2note_mapper.get_frequency_from_distance(d.min_distance_m) for d in detections]
             tone_gen.set_frequencies(frequencies)
             
             cv2.imshow('RealSense with Bounding Box', color_image_with_overlay)
