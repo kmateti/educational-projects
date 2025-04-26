@@ -7,16 +7,17 @@ from typing import Optional
 
 from src.io.frames import FrameData
 
-MAX_RANGE_M = 4.0  # Maximum range for the bounding box in meters
+MAX_RANGE_M = 2.6  # Maximum range for the bounding box in meters
 
 @dataclass
 class AngularBounds:
     """Defines an angular sector in camera space."""
     azimuth_center: float  # Degrees, 0 = center, negative = left, positive = right
     azimuth_span: float    # Degrees, total width of sector
+    elevation_center: float = -10.0  # Degrees, 0 = center, negative = down, positive = up    
     elevation_span: float = 10.0  # Degrees, total height centered on 0
-    min_range: float = 0.3  # Minimum detection distance in meters
-    max_range: float = 4.0  # Maximum detection distance in meters
+    min_range: float = 0.5  # Minimum detection distance in meters
+    max_range: float = MAX_RANGE_M  # Maximum detection distance in meters
 
 @dataclass
 class Sector:
@@ -62,8 +63,8 @@ def get_angular_detection(frame_data: FrameData, bounds: AngularBounds, name: st
     valid_mask = (depths > bounds.min_range) & (depths < bounds.max_range) & \
                 (azimuth >= bounds.azimuth_center - half_az_span) & \
                 (azimuth <= bounds.azimuth_center + half_az_span) & \
-                (elevation >= -half_el_span) & \
-                (elevation <= half_el_span)
+                (elevation >= bounds.elevation_center - half_el_span) & \
+                (elevation <= bounds.elevation_center + half_el_span)
     
     if not np.any(valid_mask):
         return None

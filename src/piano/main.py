@@ -15,23 +15,23 @@ from src.io.frames import get_color_and_depth_frames, FrameData
 
 # Calculate sector size (86° FOV divided into 9 sections, using 4 sectors)
 SECTOR_WIDTH = 86 / 9  # ~9.56 degrees
-
+NUM_POINTS = 50*50  # Minimum number of valid points for detection
 SECTORS = [
     Sector("Far Left", (0, 0, 255), 
            AngularBounds(azimuth_center=-43 + SECTOR_WIDTH, 
-                        azimuth_span=SECTOR_WIDTH*2)),
+                        azimuth_span=SECTOR_WIDTH)),
            
     Sector("Left", (0, 255, 0), 
            AngularBounds(azimuth_center=-43 + 3*SECTOR_WIDTH,
-                        azimuth_span=SECTOR_WIDTH*2)),
+                        azimuth_span=SECTOR_WIDTH)),
            
     Sector("Right", (255, 0, 0), 
            AngularBounds(azimuth_center=-43 + 5*SECTOR_WIDTH,
-                        azimuth_span=SECTOR_WIDTH*2)),
+                        azimuth_span=SECTOR_WIDTH)),
            
     Sector("Far Right", (255, 0, 255), 
            AngularBounds(azimuth_center=-43 + 7*SECTOR_WIDTH,
-                        azimuth_span=SECTOR_WIDTH*2))
+                        azimuth_span=SECTOR_WIDTH))
 ]
 
 def overlay_sectors(frame_data: FrameData, sectors: list[Sector]) -> tuple[np.ndarray, list[SectorDetection]]:
@@ -45,7 +45,7 @@ def overlay_sectors(frame_data: FrameData, sectors: list[Sector]) -> tuple[np.nd
     
     for sector in sectors:
         detection = get_angular_detection(frame_data, sector.bounds, sector.name, sector.color)
-        if detection is not None:
+        if detection is not None and detection.num_valid_points > NUM_POINTS:
             # Get note for current distance
             note = get_note_from_distance(detection.min_distance_m)
             
@@ -73,6 +73,12 @@ def overlay_sectors(frame_data: FrameData, sectors: list[Sector]) -> tuple[np.nd
             # Add note below distance
             cv2.putText(blended, f"Note: {note}",
                        (x_pos, 60),
+                       cv2.FONT_HERSHEY_SIMPLEX,
+                       0.7, sector.color, 2)
+            
+            # Add note below distance
+            cv2.putText(blended, f"Points: {detection.num_valid_points}",
+                       (x_pos, 90),
                        cv2.FONT_HERSHEY_SIMPLEX,
                        0.7, sector.color, 2)
             
@@ -128,7 +134,7 @@ def main(bag_file=None):
             # Process frames using sectors instead of boxes
             t1 = time.time()
             color_image_with_overlay, detections = overlay_sectors(frame_data, SECTORS)
-            
+                    
             # Update audio
             t3 = time.time()
             frequencies = [get_frequency_from_distance(d.min_distance_m) for d in detections]
@@ -137,7 +143,6 @@ def main(bag_file=None):
             cv2.imshow('RealSense with Bounding Box', color_image_with_overlay)
             if cv2.waitKey(1) in [ord('q'), 27]:
                 break
-            
             frame_count += 1
             
     except Exception as e:

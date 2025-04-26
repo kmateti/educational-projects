@@ -84,6 +84,12 @@ def get_note_from_frequency(frequency: float, tolerance: float = 1.0) -> str:
     return ""
 
 
+# Middle C and one octave lower (C3 and C4)
+C3_C4_FREQUENCIES = {
+    note: C_MAJOR_FREQUENCIES[note]
+    for note in ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4']
+}
+
 # C pentatonic scale (one octave)
 C_PENTATONIC_FREQUENCIES = {
     note: C_MAJOR_FREQUENCIES[note]
@@ -124,7 +130,7 @@ def get_frequency_from_distance(min_distance_m: float,
     # Find which range the distance falls into
     for min_sect, max_sect, note in ranges:
         if min_sect <= min_distance_m <= max_sect:
-            return C_PENTATONIC_FREQUENCIES[note]
+            return C3_C4_FREQUENCIES[note]
     
     return 0
 
