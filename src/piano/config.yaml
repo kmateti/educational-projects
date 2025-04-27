@@ -1,5 +1,5 @@
 sectors:
-  - name: "Bass (Far Left)"
+  - name: "Bass"
     color: [0, 0, 255]
     ray:
       azimuth_center: -35.0
@@ -11,7 +11,7 @@ sectors:
       max_range: 2.8
       lowest_note: 'C2'
       highest_note: 'C3'
-  - name: "Tenor (Center Left)"
+  - name: "Tenor"
     color: [0, 255, 0]
     ray:
       azimuth_center: -15.0
@@ -23,10 +23,10 @@ sectors:
       max_range: 2.8
       lowest_note: 'G2'
       highest_note: 'G3'
-  - name: "Alto (Center Right)"
+  - name: "Alto"
     color: [255, 0, 0]
     ray:
-      azimuth_center: 15
+      azimuth_center: 5.0
       azimuth_span: 5.0
       elevation_center: -10
       elevation_span: 10
@@ -35,10 +35,10 @@ sectors:
       max_range: 2.8
       lowest_note: 'E3'
       highest_note: 'E4'
-  - name: "Soprano (Far Right)"
+  - name: "Soprano"
     color: [255, 0, 255]
     ray:
-      azimuth_center: 35.0
+      azimuth_center: 25.0
       azimuth_span: 5.0
       elevation_center: -10
       elevation_span: 10

@@ -44,44 +44,74 @@ SECTORS_WITH_MAPPERS: List[SectorWithMapper] = [
 
 NUM_POINTS = 50 * 50  # Minimum number of valid points for a valid detection
 
+def get_discrete_color(index: int, total: int) -> tuple[int, int, int]:
+    """
+    Generate a discrete color from a continuous HSV colormap.
+    The hue is spread evenly over the range [0, 180] (OpenCV HSV hue range).
+    """
+    hue = int((index / total) * 180)
+    hsv = np.uint8([[[hue, 255, 255]]])
+    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)[0][0]
+    return tuple(int(c) for c in bgr)
+
+
 def overlay_sectors(frame_data: FrameData,
                     sectors_with_mappers: List[SectorWithMapper]
                    ) -> Tuple[np.ndarray, List[Tuple[SectorDetection, SectorWithMapper]]]:
-    """Overlay sector detections on the color image and return detections with their corresponding SectorWithMapper."""
+    """
+    Overlay sector detections on the color image using text that reflects the ray configuration.
+    The text color for each sector is chosen based on the discrete color corresponding to the note range.
+    """
     overlay_image = frame_data.color_image_rgb.copy()
     blended = overlay_image.copy()
-    detections: List[Tuple[SectorDetection, SectorWithMapper]] = []
     
-    # Convert the depth colormap image to RGB once (for overlaying)
-    depth_rgb = cv2.cvtColor(frame_data.depth_colormap_image, cv2.COLOR_BGR2RGB)
+    # Convert depth image (in millimeters) to meters.
+    depths = frame_data.depth_image.astype(float) / 1000.0
+    
+    # Calculate the horizontal FOV of the camera from intrinsics.
+    width = frame_data.depth_intrinsics.width
+    fx = frame_data.depth_intrinsics.fx
+    h_fov = 2 * np.rad2deg(np.arctan(width / (2 * fx)))
+    
+    detections: List[Tuple[SectorDetection, SectorWithMapper]] = []
     
     for swm in sectors_with_mappers:
         detection = swm.sector.detect(frame_data)
-        if detection is not None and detection.num_valid_points > NUM_POINTS:
-            note = swm.mapper.get_note_from_distance(detection.min_distance_m)
-            
-            # Create an overlay using the valid mask from the detection
-            valid_mask = detection.valid_mask
-            alpha = 0.4
-            depth_section = np.zeros_like(overlay_image)
-            depth_section[valid_mask] = depth_rgb[valid_mask]
-            cv2.addWeighted(blended, 1.0, depth_section, alpha, 0, blended)
-            
-            # Determine text position based on the detected azimuth
-            img_width = blended.shape[1]
-            angle_range = 86  # Total FOV; adjust as needed
-            x_pos = int((detection.azimuth_deg + 43) * img_width / angle_range)
-            
-            # Overlay text information on the blended image
-            text = f"{swm.sector.name}: {detection.min_distance_m:.1f}m"
-            cv2.putText(blended, text, (x_pos, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, swm.sector.color, 2)
-            cv2.putText(blended, f"Note: {note}", (x_pos, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, swm.sector.color, 2)
-            cv2.putText(blended, f"Points: {detection.num_valid_points}", (x_pos, 90),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, swm.sector.color, 2)
-            
-            detections.append((detection, swm))
+        if detection is None or detection.num_valid_points <= NUM_POINTS:
+            continue
+        
+        # Determine which note interval the detection.min_distance_m falls into.
+        total_ranges = len(swm.mapper.ranges)
+        note_index = total_ranges - 1  # Default to last range.
+        for idx, (d_min, d_max, _) in enumerate(swm.mapper.ranges):
+            if d_min <= detection.min_distance_m < d_max:
+                note_index = idx
+                break
+        
+        discrete_color = get_discrete_color(note_index, total_ranges)
+        
+        # Use the note mapper to get note label (optional)
+        note_label = swm.mapper.get_note_from_distance(detection.min_distance_m)
+        
+        # Compute text x position using the sector's azimuth_center.
+        img_width = overlay_image.shape[1]
+        x_pos = int(((swm.sector.bounds.azimuth_center + h_fov/2) / h_fov) * img_width)
+        
+        cv2.putText(blended, f"{swm.sector.name}", (x_pos, 25),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, discrete_color, 2)
+        cv2.putText(blended, f"Dist: {detection.min_distance_m:.1f}m", (x_pos, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, discrete_color, 2)
+        cv2.putText(blended, f"Note: {note_label}", (x_pos, 75),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, discrete_color, 2)
+        cv2.putText(blended, f"Points: {detection.num_valid_points}", (x_pos, 100),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, discrete_color, 2)
+        
+        # Apply discrete color overlay for each note range.
+        color_overlay = np.zeros_like(overlay_image)
+        color_overlay[detection.valid_mask] = discrete_color
+        blended = cv2.addWeighted(blended, 1.0, color_overlay, 0.4, 0)
+        
+        detections.append((detection, swm))
     
     return blended, detections
 
