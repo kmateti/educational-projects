@@ -22,6 +22,13 @@ Assume we use the `pyrealsense` to get a color and depth image from the D435i. T
     C-->D
 ```
 
+## Room Setup
+
+Use the top down image and grid to markdown the floor of a room with 12ft by 12ft clearance. The camera is located at the (0,0) coordinate.
+
+![Top Down View of Camera](images/top_down_view_sectors.png)
+
+
 ## Development Setup
 
 ### Dependencies
