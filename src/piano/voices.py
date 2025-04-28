@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from typing import Optional
+import yaml
 
 # Add these constants at the top with other constants
 # C major scale frequencies (C2 to C6)
@@ -57,32 +57,11 @@ C_MAJOR_FREQUENCIES = {
     'C8': 4186.01  # Highest note on a piano
 }
 
-MAX_RANGE_M = 4.0  # Maximum range for the bounding box in meters
-
-def get_note_from_distance(min_distance_m):
-    """Map distance to a note in C major scale using logarithmic scaling."""
-    # Return the note name
-    return get_note_from_frequency(get_frequency_from_distance(min_distance_m))
-
-# def get_frequency_from_distance(avg_distance_m):
-#     """Calculate frequency based on average distance."""
-#     # Example: Frequency decreases as distance increases
-#     # This is a simple linear mapping; adjust as needed
-#     return int(50 + 1000 * max(MAX_RANGE_M - avg_distance_m, 0))  # Adjust the scaling factor as needed
-def get_note_from_frequency(frequency: float, tolerance: float = 1.0) -> str:
-    """Map a frequency back to its note name.
-    Args:
-        frequency: The frequency to map
-        tolerance: How close the frequency needs to be to match (percentage)
-    Returns:
-        The note name or empty string if no match found
-    """
-    for note, freq in C_MAJOR_FREQUENCIES.items():
-        # Check if frequency is within tolerance % of the target frequency
-        if abs(frequency - freq) / freq * 100 <= tolerance:
-            return note
-    return ""
-
+# Middle C and one octave lower (C3 and C4)
+C3_C4_FREQUENCIES = {
+    note: C_MAJOR_FREQUENCIES[note]
+    for note in ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4']
+}
 
 # C pentatonic scale (one octave)
 C_PENTATONIC_FREQUENCIES = {
@@ -90,56 +69,87 @@ C_PENTATONIC_FREQUENCIES = {
     for note in ['C3', 'D3', 'E3', 'G3', 'A3','C4']
 }
 
-# Calculate section size for 5 notes
-min_range = 0.5  # Minimum operating distance (closest = highest note)
-max_range = 3.5  # Maximum operating distance (furthest = lowest note)
-range_size = max_range - min_range
-section_size = range_size / 5
-
-# Map distance ranges to notes (closer = higher pitch)
-ranges = [
-    (max_range - section_size, max_range, 'C3'),      # Furthest = lowest note
-    (max_range - 2*section_size, max_range - section_size, 'D3'),
-    (max_range - 3*section_size, max_range - 2*section_size, 'E3'),
-    (max_range - 4*section_size, max_range - 3*section_size, 'G3'),
-    (min_range, max_range - 4*section_size, 'A3')     # Closest = highest note
-]
-
-def get_frequency_from_distance(min_distance_m: float, 
-                              min_range: float = 0.5, 
-                              max_range: float = 3.5) -> float:
-    """Map distance to a note in C pentatonic scale with configurable range.
-    
-    Args:
-        min_distance_m: Distance in meters
-        min_range: Minimum operating distance (closest = highest note)
-        max_range: Maximum operating distance (furthest = lowest note)
-        
-    Returns:
-        float: Frequency of the corresponding note
-    """
-    if min_distance_m < min_range or min_distance_m > max_range:
-        return 0
-    
-    # Find which range the distance falls into
-    for min_sect, max_sect, note in ranges:
-        if min_sect <= min_distance_m <= max_sect:
-            return C_PENTATONIC_FREQUENCIES[note]
-    
-    return 0
+@dataclass
+class RayConfig:
+    azimuth_center: float
+    azimuth_span: float
+    elevation_center: float
+    elevation_span: float
 
 @dataclass
-class Voice:
-    """Represents a virtual piano key in 3D space."""
+class NoteMapperConfig:
+    min_range: float = 0.5
+    max_range: float = 3.5
+    lowest_note: str = 'C3'
+    highest_note: str = 'C4'
+
+@dataclass
+class SectorConfig:
     name: str
-    color: tuple[int, int, int]
-    bounds: tuple[tuple[float, float, float], tuple[float, float, float]]  # ((min_x, min_y, min_z), (max_x, max_y, max_z))
+    ray: RayConfig
+    note_mapper: NoteMapperConfig
+
+class SectorDistanceToNoteMapper:
+    def __init__(self, note_mapper_config: NoteMapperConfig):
+        self.min_range = note_mapper_config.min_range
+        self.max_range = note_mapper_config.max_range
+        self.lowest_note = note_mapper_config.lowest_note
+        self.highest_note = note_mapper_config.highest_note
+        self.ranges = []
+        self._calculate_ranges()
+
+    def _calculate_ranges(self):
+        # Create a list of notes from the global C_MAJOR_FREQUENCIES dictionary.
+        notes = list(C_MAJOR_FREQUENCIES.keys())
+        start_index = notes.index(self.lowest_note)
+        end_index = notes.index(self.highest_note) + 1
+        selected_notes = notes[start_index:end_index]
+        
+        range_size = self.max_range - self.min_range
+        section_size = range_size / len(selected_notes)
+        self.ranges = [
+            (self.max_range - (i + 1) * section_size, self.max_range - i * section_size, note)
+            for i, note in enumerate(selected_notes)
+        ]
+        
+    def get_note_from_distance(self, distance: float) -> str:
+        """Return the note corresponding to the given distance."""
+        for d_min, d_max, note in self.ranges:
+            if d_min <= distance < d_max:
+                return note
+        # Return the last note if distance is beyond calculated range.
+        return self.ranges[-1][2] if self.ranges else ""
     
-    def get_frequency(self, distance: float, valid_points: int) -> float:
-        """Calculate frequency based on the minimum distance if enough valid points."""
-        return get_frequency_from_distance(distance) if valid_points > 10 else 0
+    def get_frequency_from_distance(self, distance: float) -> float:
+        """Return the frequency for the note corresponding to the given distance."""
+        note = self.get_note_from_distance(distance)
+        return C_MAJOR_FREQUENCIES.get(note, 0)
+        
+def load_sector_configs(config_path: str) -> dict[str, SectorConfig]:
+    with open(config_path, 'r') as file:
+        config = yaml.safe_load(file)
     
-    def get_note(self, distance: float, valid_points: int) -> str:
-        """Get the musical note name based on the distance if enough valid points."""
-        freq = self.get_frequency(distance, valid_points)
-        return get_note_from_frequency(freq) if freq > 0 else ""
+    sectors_list = config.get('sectors')
+    if not sectors_list:
+        raise ValueError("No sectors found in configuration.")
+
+    sector_configs = {}
+    for sec in sectors_list:
+        ray_conf = RayConfig(
+            azimuth_center=sec['angular']['azimuth_center'],  # still using 'angular' in config file
+            azimuth_span=sec['angular']['azimuth_span'],
+            elevation_center=sec['angular'].get('elevation_center', 0),
+            elevation_span=sec['angular'].get('elevation_span', 0)
+        )
+        note_mapper_conf = NoteMapperConfig(
+            min_range=sec['mapper'].get('min_range', 0.5),
+            max_range=sec['mapper'].get('max_range', 3.5),
+            lowest_note=sec['mapper'].get('lowest_note', 'C3'),
+            highest_note=sec['mapper'].get('highest_note', 'C4')
+        )
+        sector_configs[sec['name']] = SectorConfig(
+            name=sec['name'],
+            ray=ray_conf,
+            note_mapper=note_mapper_conf
+        )
+    return sector_configs

@@ -1,0 +1,49 @@
+sectors:
+  - name: "Bass"
+    color: [0, 0, 255]
+    ray:
+      azimuth_center: -35.0
+      azimuth_span: 5.0
+      elevation_center: -10
+      elevation_span: 10
+    note_mapper:
+      min_range: 0.5
+      max_range: 2.8
+      lowest_note: 'C2'
+      highest_note: 'C3'
+  - name: "Tenor"
+    color: [0, 255, 0]
+    ray:
+      azimuth_center: -15.0
+      azimuth_span: 5.0
+      elevation_center: -10
+      elevation_span: 10
+    note_mapper:
+      min_range: 0.5
+      max_range: 2.8
+      lowest_note: 'G2'
+      highest_note: 'G3'
+  - name: "Alto"
+    color: [255, 0, 0]
+    ray:
+      azimuth_center: 5.0
+      azimuth_span: 5.0
+      elevation_center: -10
+      elevation_span: 10
+    note_mapper:
+      min_range: 0.5
+      max_range: 2.8
+      lowest_note: 'E3'
+      highest_note: 'E4'
+  - name: "Soprano"
+    color: [255, 0, 255]
+    ray:
+      azimuth_center: 25.0
+      azimuth_span: 5.0
+      elevation_center: -10
+      elevation_span: 10
+    note_mapper:
+      min_range: 0.5
+      max_range: 2.8
+      lowest_note: 'C4'
+      highest_note: 'C5'
