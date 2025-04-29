@@ -6,6 +6,9 @@ import numpy as np
 from src.piano.voices import SectorDistanceToNoteMapper, NoteMapperConfig, C_MAJOR_FREQUENCIES
 from src.piano.tone_generator import ToneGenerator
 
+bpm = 20  # beats per minute
+note_duration = 60 / (bpm * 4)  # Duration of a quarter note in seconds
+
 def load_config(config_path: str) -> dict:
     """Load the YAML configuration."""
     with open(config_path, 'r') as file:
@@ -14,7 +17,8 @@ def load_config(config_path: str) -> dict:
 def get_distance_for_note(note: str, mapper: SectorDistanceToNoteMapper) -> float:
     """
     For the given SectorDistanceToNoteMapper, locate the distance interval assigned to the note.
-    Returns the midpoint of the distance interval if found.
+    Returns the midpoint of the dista
+    nce interval if found.
     """
     for d_min, d_max, n in mapper.ranges:
         if n == note:
@@ -75,7 +79,7 @@ def main():
         "D3", "E3", "F3", "G3", "A3", "B3", "C4", "D4",
         "E4", "F4", "G4", "A4", "B4", "C5"
     ]
-    
+
     mary_had_a_little_lamb_melody = [
         "E4", "D4", "C4", "D4", "E4", "E4", "E4", "D4",
         "D4", "D4", "E4", "G4", "G4", "E4", "D4", "C4",
@@ -83,7 +87,14 @@ def main():
         "D4", "C4", "C4", "C4"
     ]
     
-    melody = mary_had_a_little_lamb_melody
+    count_on_me = [
+        # Chorus: "You can count on me like one, two, three"
+        'E4', '', 'E4', 'C4', 'E4', 'G4', 'C4', 'B3', 'E4', 'G4', 'B3', '', 'B3',
+        # "I'll be there"
+        'A3', 'A3'
+    ]
+    
+    melody = count_on_me
     orchestration = convert_melody(melody, sectors_map)
     print("Melody orchestration:")
     for item in orchestration:
@@ -93,7 +104,7 @@ def main():
     tone_gen = ToneGenerator()
     tone_gen.start()
 
-    note_duration = 0.75  # seconds per note
+    
     for item in orchestration:
         freq = item["frequency"]
         if freq is not None:
