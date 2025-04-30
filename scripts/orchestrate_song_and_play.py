@@ -17,8 +17,7 @@ def load_config(config_path: str) -> dict:
 def get_distance_for_note(note: str, mapper: SectorDistanceToNoteMapper) -> float:
     """
     For the given SectorDistanceToNoteMapper, locate the distance interval assigned to the note.
-    Returns the midpoint of the dista
-    nce interval if found.
+    Returns the midpoint of the distance interval if found.
     """
     for d_min, d_max, n in mapper.ranges:
         if n == note:
