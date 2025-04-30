@@ -24,7 +24,11 @@ Assume we use the `pyrealsense` to get a color and depth image from the D435i. T
 
 ## Room Setup
 
-Use the top down image and grid to markdown the floor of a room with 12ft by 12ft clearance. The camera is located at the (0,0) coordinate.
+A room with about 12ft by 12ft clearance is needed, and the camera should be mounted on a tripod or table that is about waist level. Each virtual ray is about 9ft (2.75 m), and will be divided into one octave (8 notes), meaning each note has a little over 1 ft of distance.
+
+![Top Down View of Camera and Rough Dimensions](images/top_down_view_sectors_footprint.svg)
+
+The top down plot can be used to markdown the floor with tape to help students know where the virtual ray. The camera is located at the (0,0) coordinate.
 
 ![Top Down View of Camera](images/top_down_view_sectors.png)
 
@@ -36,8 +40,14 @@ This project uses modern Python packaging with `pyproject.toml` and `uv`.
 
 ```bash
 # Install dependencies from lock file
-uv pip install -r uv.lock
+uv sync
 
 # Update lock file (after changing pyproject.toml)
-uv pip compile pyproject.toml -o uv.lock
+uv lock
+```
+
+### Run the Application
+
+```
+uv run python src/piano/main.py
 ```

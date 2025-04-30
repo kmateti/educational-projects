@@ -5,7 +5,7 @@ This repository develops interactive educational projects that aim to spark inte
 ## Projects
 
 1. [Depth Camera Piano](./docs/depth-camera-piano.md): This project uses a depth camera (like the Intel RealSense D435i) to sense the distance away from four virtual rays. Based on the minimum sensed distance of each ray, a musical note plays. This forms a virtual instrument that enables four independent "voices" to make music simultaneously. The lesson that follows touches on how stereoscopic depth cameras work, image and video processing, geometry, music theory, and programming.
-
+2. [Interactive Voice Tuner](./docs/voice-tuner.md): This project uses a microphone to measure the dominant frequency and uses a camera (any webcam) to overlay the difference from a note in the key of C. The camera isn't necessary except that people like seeing themselves in the mirror. The lesson that follows touches on audio signals, determining frequency of a wave, music theory, and programming.
 
 ## Use of AI
 
