@@ -36,8 +36,14 @@ This project uses modern Python packaging with `pyproject.toml` and `uv`.
 
 ```bash
 # Install dependencies from lock file
-uv pip install -r uv.lock
+uv sync
 
 # Update lock file (after changing pyproject.toml)
-uv pip compile pyproject.toml -o uv.lock
+uv lock
+```
+
+### Run the Application
+
+```
+uv run python src/piano/main.py
 ```

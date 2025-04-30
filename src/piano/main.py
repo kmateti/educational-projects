@@ -162,7 +162,7 @@ def main(bag_file=None):
             ]
             tone_gen.set_frequencies(frequencies)
             
-            cv2.imshow('RealSense with Sectors', overlay_image)
+            cv2.imshow('Depth Camera Piano', overlay_image)
             if cv2.waitKey(1) in [ord('q'), 27]:
                 break
             frame_count += 1
