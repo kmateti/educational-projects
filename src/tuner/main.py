@@ -1,6 +1,6 @@
 """
 Listen to the microphone and show an overlay of the detected notes on the camera feed.
-This example uses the integrated webcam and microphone.
+This example uses the integrated webcam and microphone. Press "s" to switch camera, "m" to switch microphone.
 """
 
 import cv2
@@ -22,18 +22,14 @@ def freq_to_note(freq: float) -> str:
 
 def detect_pitch(audio_data: bytes, rate: int) -> float:
     """
-    Estimate the predominant frequency in the given audio snippet using a FFT-based approach.
+    Estimate the predominant frequency in the given audio snippet using an FFT-based approach.
     """
-    # Convert bytes to numpy array of float32; the stream format is paFloat32
     audio_np = np.frombuffer(audio_data, dtype=np.float32)
-    # Apply a Hann window to reduce spectral leakage
     window = np.hanning(len(audio_np))
     audio_np = audio_np * window
-    # Compute the FFT and corresponding frequencies
     fft_vals = np.fft.rfft(audio_np)
     freqs = np.fft.rfftfreq(len(audio_np), d=1.0/rate)
     magnitudes = np.abs(fft_vals)
-    # Find the peak in the magnitude spectrum
     peak_idx = np.argmax(magnitudes)
     peak_freq = freqs[peak_idx]
     return peak_freq
@@ -50,31 +46,77 @@ def audio_callback(in_data, frame_count, time_info, status):
         print("Pitch detection error:", e)
     return (in_data, pyaudio.paContinue)
 
-def start_audio_stream():
+def start_audio_stream(mic_index=None):
     """
     Initialize and start a PyAudio stream that uses a callback for realtime pitch detection.
+    The input_device_index parameter allows switching the microphone.
     """
     p = pyaudio.PyAudio()
     stream = p.open(format=pyaudio.paFloat32,
                     channels=1,
                     rate=44100,
                     input=True,
+                    input_device_index=mic_index,
                     frames_per_buffer=2048,
                     stream_callback=audio_callback)
     stream.start_stream()
     return p, stream
 
+def open_camera(cam_index):
+    cap = cv2.VideoCapture(cam_index)
+    if not cap.isOpened():
+        print(f"Unable to open camera with index {cam_index}!")
+    return cap
+
+def draw_main_overlay(frame, display_text, diff_text=None, diff_color=(255,255,255)):
+    """
+    Draws a 50% transparent black box with the main display text and (optionally) the delta text.
+    """
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 1
+    thickness = 2
+    pad_x, pad_y = 16, 12  # Padding around text
+
+    # Get text sizes
+    (text_w, text_h), _ = cv2.getTextSize(display_text, font, font_scale, thickness)
+    diff_w, diff_h = 0, 0
+    if diff_text:
+        (diff_w, diff_h), _ = cv2.getTextSize(diff_text, font, font_scale, thickness)
+    box_width = max(text_w, diff_w) + 2 * pad_x
+    box_height = text_h + (diff_h if diff_text else 0) + 3 * pad_y
+
+    # Top-left corner of the box
+    box_x, box_y = 20, 20
+
+    # Draw the transparent rectangle
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (box_x, box_y), (box_x + box_width, box_y + box_height), (0, 0, 0), -1)
+    alpha = 0.5
+    frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+
+    # Draw the text on top of the box
+    text_org = (box_x + pad_x, box_y + pad_y + text_h)
+    cv2.putText(frame, display_text, text_org, font, font_scale, (0, 255, 0), thickness, cv2.LINE_AA)
+    if diff_text:
+        diff_org = (box_x + pad_x, box_y + pad_y + text_h + pad_y + diff_h)
+        cv2.putText(frame, diff_text, diff_org, font, font_scale, diff_color, thickness, cv2.LINE_AA)
+    return frame
+
 def main():
     global detected_frequency
 
-    # Start the microphone listener
-    pa, audio_stream = start_audio_stream()
-    
-    # Open webcam (integrated camera)
-    cap = cv2.VideoCapture(1)
-    if not cap.isOpened():
-        print("Unable to open camera!")
+    # Start with default microphone device index
+    mic_index = 0  
+    max_mic_index = 5  # maximum mic index to cycle through
+
+    # Start the microphone listener with the current mic device.
+    pa, audio_stream = start_audio_stream(mic_index)
+
+    cam_index = 2  # start with camera index 2 (change as desired)
+    cap = open_camera(cam_index)
+    if cap is None or not cap.isOpened():
         return
+    max_cam_index = 5   # maximum camera index to cycle through
 
     while True:
         ret, frame = cap.read()
@@ -82,31 +124,55 @@ def main():
             print("Failed to get frame from camera")
             break
 
-        # Optionally flip the frame for a mirror effect
         frame = cv2.flip(frame, 1)
-        
-        # Map the detected frequency to a note using the C_MAJOR_FREQUENCIES mapping.
         note_text = freq_to_note(detected_frequency)
         display_text = f"Freq: {detected_frequency:.1f} Hz, Note: {note_text}"
-        cv2.putText(frame, display_text, (30, 40), cv2.FONT_HERSHEY_SIMPLEX,
-                    1, (0, 255, 0), 2, cv2.LINE_AA)
-        
-        # If the note was found in C_MAJOR_FREQUENCIES, compute the difference.
         target_freq = C_MAJOR_FREQUENCIES.get(note_text, None)
+        diff_text = None
+        diff_color = (255, 255, 255)
         if target_freq is not None:
             diff = detected_frequency - target_freq
-            # Choose blue if detected frequency is lower than the target, red if higher.
             diff_color = (255, 0, 0) if diff < 0 else (0, 0, 255)
             diff_text = f"Delta: {diff:+.1f} Hz"
-            cv2.putText(frame, diff_text, (30, 80), cv2.FONT_HERSHEY_SIMPLEX,
-                        1, diff_color, 2, cv2.LINE_AA)
+
+        frame = draw_main_overlay(frame, display_text, diff_text, diff_color)
+
+        # Overlay current video and audio source info on the bottom-right
+        height, width, _ = frame.shape
+        source_text = f"Cam: {cam_index} | Mic: {mic_index}"
+        cv2.putText(frame, source_text, (width - 300, height - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
         
         cv2.imshow("Tuner - Camera Feed", frame)
-        # Exit on 'q' key press
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        key = cv2.waitKey(1) & 0xFF
+        
+        if key == ord('q'):
             break
+        elif key == ord('s'):
+            # Switch camera index: release current camera and try the next index.
+            cap.release()
+            cam_index = (cam_index + 1) % max_cam_index
+            print(f"Switching to camera index {cam_index}")
+            cap = open_camera(cam_index)
+            if not cap.isOpened():
+                print(f"Camera index {cam_index} is not available, reverting to index 0.")
+                cam_index = 0
+                cap = open_camera(cam_index)
+        elif key == ord('m'):
+            # Switch microphone: close the current audio stream and try the next microphone.
+            print(f"Switching microphone: current mic index {mic_index}")
+            audio_stream.stop_stream()
+            audio_stream.close()
+            pa.terminate()
+            mic_index = (mic_index + 1) % max_mic_index
+            print(f"Switching to microphone index {mic_index}")
+            try:
+                pa, audio_stream = start_audio_stream(mic_index)
+            except Exception as e:
+                print(f"Unable to open microphone with index {mic_index}: {e}")
+                mic_index = 0
+                pa, audio_stream = start_audio_stream(mic_index)
 
-    # Cleanup resources
     cap.release()
     cv2.destroyAllWindows()
     audio_stream.stop_stream()
