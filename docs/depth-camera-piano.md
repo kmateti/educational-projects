@@ -36,7 +36,7 @@ The top down plot can be used to markdown the floor with tape to help students k
 ## Development Setup
 
 ### Dependencies
-This project uses modern Python packaging with `pyproject.toml` and `uv`. 
+This project uses modern Python packaging with `pyproject.toml` and `uv`. Note: the pinned python version is specified by the `.python-version` file, set to 3.11, and uv should automatically detect, install, and install the python dependencies compatible with that python version.
 
 ```bash
 # Install dependencies from lock file
