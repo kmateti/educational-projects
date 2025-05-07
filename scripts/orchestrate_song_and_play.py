@@ -8,6 +8,7 @@ from src.piano.tone_generator import ToneGenerator
 
 bpm = 20  # beats per minute
 note_duration = 60 / (bpm * 4)  # Duration of a quarter note in seconds
+rest_duration = note_duration * 0.5  # Duration of a rest (half the note duration)
 
 def load_config(config_path: str) -> dict:
     """Load the YAML configuration."""
@@ -110,11 +111,13 @@ def main():
             # Set the frequency for this note.
             tone_gen.set_frequencies([freq])
             print(f"Playing {item['note']} at {freq:.1f} Hz ({item['distance']:0.2f} m) on {item['sector']}")
+            time.sleep(note_duration)
         else:
             # If no mapping is found, silence the tone.
             tone_gen.set_frequencies([])
             print(f"Skipping note {item['note']} (no mapping)")
-        time.sleep(note_duration)
+            time.sleep(rest_duration)
+        
 
     tone_gen.stop()
 
