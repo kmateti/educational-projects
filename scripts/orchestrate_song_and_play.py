@@ -5,10 +5,12 @@ import numpy as np
 
 from src.piano.voices import SectorDistanceToNoteMapper, NoteMapperConfig, C_MAJOR_FREQUENCIES
 from src.piano.tone_generator import ToneGenerator
+from src.piano.songs import harry_potter_melody, all_songs
 
 bpm = 20  # beats per minute
 note_duration = 60 / (bpm * 4)  # Duration of a quarter note in seconds
 rest_duration = note_duration * 0.5  # Duration of a rest (half the note duration)
+active_melody = harry_potter_melody
 
 def load_config(config_path: str) -> dict:
     """Load the YAML configuration."""
@@ -72,58 +74,9 @@ def main():
         mapper = SectorDistanceToNoteMapper(mapper_conf)
         # The mapper computes its ranges internally.
         sectors_map[name] = mapper
-
-    # Example melody in the key of C (adjust as desired)
-    full_scale_melody = [
-        "C2", "D2", "E2", "F2", "G2", "A2", "B2", "C3",
-        "D3", "E3", "F3", "G3", "A3", "B3", "C4", "D4",
-        "E4", "F4", "G4", "A4", "B4", "C5"
-    ]
-
-    mary_had_a_little_lamb_melody = [
-        "E4", "D4", "C4", "D4", "E4", "E4", "E4", "D4",
-        "D4", "D4", "E4", "G4", "G4", "E4", "D4", "C4",
-        "D4", "E4", "E4", "E4", "E4", "D4", "D4", "E4",
-        "D4", "C4", "C4", "C4"
-    ]
-
-    happy_birthday_melody = [
-        "C4", "C4", "D4", "C4", "F4", "E4",
-        "C4", "C4", "D4", "C4", "G4", "F4",
-        "C4", "C4", "C5", "A4", "F4", "E4",
-        "D4", "B3", "B3", "A3", "F4", "G4",
-        "F4"
-    ]
-
-    jingle_bells_melody = [
-        "E4", "E4", "E4", "E4", "E4", "E4",
-        "E4", "G4", "C4", "D4", "E4",
-        "F4", "F4", "F4", "F4", "F4",
-        "E4", "E4", "E4", "D4", "D4",
-        "D4", "E4", "D4", "C4"
-    ]
-
-    ode_to_joy_melody = [
-        "E4", "E4", "F4", "G4", "G4", "F4",
-        "E4", "D4", "C4", "C4", "D4", "E4",
-        "E4", "D4", "D4"
-    ]
-
-    twinkle_twinkle_melody = [
-        "C4", "C4", "G4", "G4", "A4", "A4",
-        "G4", "F4", "F4", "E4", "E4", "D4",
-        "D4", "C4"
-    ]
     
-    count_on_me = [
-        # Chorus: "You can count on me like one, two, three"
-        'E4', '', 'E4', 'C4', 'E4', 'G4', 'C4', 'B3', 'E4', 'G4', 'B3', '', 'B3',
-        # "I'll be there"
-        'A3', 'A3'
-    ]
     
-    melody = count_on_me
-    orchestration = convert_melody(melody, sectors_map)
+    orchestration = convert_melody(active_melody, sectors_map)
     print("Melody orchestration:")
     for item in orchestration:
         print(f"Sector: {item['sector']}, Note: {item['note']}, Distance: {item['distance']}, Frequency: {item['frequency']}")
