@@ -86,6 +86,34 @@ def main():
         "D4", "E4", "E4", "E4", "E4", "D4", "D4", "E4",
         "D4", "C4", "C4", "C4"
     ]
+
+    happy_birthday_melody = [
+        "C4", "C4", "D4", "C4", "F4", "E4",
+        "C4", "C4", "D4", "C4", "G4", "F4",
+        "C4", "C4", "C5", "A4", "F4", "E4",
+        "D4", "B3", "B3", "A3", "F4", "G4",
+        "F4"
+    ]
+
+    jingle_bells_melody = [
+        "E4", "E4", "E4", "E4", "E4", "E4",
+        "E4", "G4", "C4", "D4", "E4",
+        "F4", "F4", "F4", "F4", "F4",
+        "E4", "E4", "E4", "D4", "D4",
+        "D4", "E4", "D4", "C4"
+    ]
+
+    ode_to_joy_melody = [
+        "E4", "E4", "F4", "G4", "G4", "F4",
+        "E4", "D4", "C4", "C4", "D4", "E4",
+        "E4", "D4", "D4"
+    ]
+
+    twinkle_twinkle_melody = [
+        "C4", "C4", "G4", "G4", "A4", "A4",
+        "G4", "F4", "F4", "E4", "E4", "D4",
+        "D4", "C4"
+    ]
     
     count_on_me = [
         # Chorus: "You can count on me like one, two, three"
