@@ -8,6 +8,7 @@ import numpy as np
 import pyaudio
 import time
 from src.piano.voices import C_MAJOR_FREQUENCIES  # Import the C major note mapping
+from main_args import MainArgs
 
 # Global variable to store the detected pitch (in Hz)
 detected_frequency = 0.0
@@ -63,10 +64,7 @@ def start_audio_stream(mic_index=None):
     return p, stream
 
 def open_camera(cam_index):
-    cap = cv2.VideoCapture(cam_index)
-    if not cap.isOpened():
-        print(f"Unable to open camera with index {cam_index}!")
-    return cap
+    return cv2.VideoCapture(cam_index)
 
 def draw_main_overlay(frame, display_text, diff_text=None, diff_color=(255,255,255)):
     """
@@ -105,18 +103,46 @@ def draw_main_overlay(frame, display_text, diff_text=None, diff_color=(255,255,2
 def main():
     global detected_frequency
 
-    # Start with default microphone device index
-    mic_index = 0  
-    max_mic_index = 5  # maximum mic index to cycle through
+    #Parse any command-line parameters
+    commandline_args = MainArgs()
+    commandline_args.parse_args()
 
-    # Start the microphone listener with the current mic device.
-    pa, audio_stream = start_audio_stream(mic_index)
+    if commandline_args.microphone_index >= 0:
+        # Start the microphone listener with the current mic device.
+        pa, audio_stream = start_audio_stream(commandline_args.microphone_index)
+        if pa != None and audio_stream != None:
+            mic_index = commandline_args.microphone_index
+    else:
+        #Try to find a microphone
+        for index in range(0, commandline_args.microphone_max_index):
+            pa, audio_stream = start_audio_stream(index)
+            if pa != None and audio_stream != None:
+                mic_index = index
+                break
 
-    cam_index = 2  # start with camera index 2 (change as desired)
-    cap = open_camera(cam_index)
-    if cap is None or not cap.isOpened():
-        return
-    max_cam_index = 5   # maximum camera index to cycle through
+        if mic_index >= commandline_args.microphone_max_index:
+            print(f"Unable to find a microphone to use!")
+            return
+
+    if commandline_args.camera_index >= 0:
+        #Start the camera chosen
+        cap = open_camera(commandline_args.camera_index)
+        if cap is None or not cap.isOpened():
+            print(f"Unable to open camera with index {commandline_args.camera_index}!")
+            return
+        
+        cam_index = commandline_args.camera_index
+    else:
+        #Try to find a camera
+        for index in range(0, commandline_args.camera_max_index):
+            cap = open_camera(index)
+            if cap is not None and cap.IsOpened():
+                cam_index = index
+                break
+
+        if index >= commandline_args.camera_max_index:
+            print(f"Unable to find a camera to use!")
+            return
 
     while True:
         ret, frame = cap.read()
@@ -151,7 +177,7 @@ def main():
         elif key == ord('s'):
             # Switch camera index: release current camera and try the next index.
             cap.release()
-            cam_index = (cam_index + 1) % max_cam_index
+            cam_index = (cam_index + 1) % commandline_args.camera_max_index
             print(f"Switching to camera index {cam_index}")
             cap = open_camera(cam_index)
             if not cap.isOpened():
@@ -164,7 +190,7 @@ def main():
             audio_stream.stop_stream()
             audio_stream.close()
             pa.terminate()
-            mic_index = (mic_index + 1) % max_mic_index
+            mic_index = (mic_index + 1) % commandline_args.microphone_max_index
             print(f"Switching to microphone index {mic_index}")
             try:
                 pa, audio_stream = start_audio_stream(mic_index)
