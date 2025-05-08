@@ -8,18 +8,17 @@ import cv2
 import numpy as np
 import time
 from src.piano.voices import C_MAJOR_FREQUENCIES  # Import the C major note mapping
-from main_args import MainArgs
+import argparse
 from microphone import Microphone
 from camera import Camera
 
-commandline_args = MainArgs()
 microphone = Microphone()
 camera = Camera()
 
 def freq_to_note(freq: float) -> str:
     """Map a frequency to the closest musical note using C_MAJOR_FREQUENCIES."""
     if freq <= 0:
-        return ""
+        return
     # Find the note from C_MAJOR_FREQUENCIES with the smallest absolute difference.
     note, note_freq = min(C_MAJOR_FREQUENCIES.items(), key=lambda item: abs(item[1] - freq))
     return note
@@ -59,20 +58,30 @@ def draw_main_overlay(frame, display_text, diff_text=None, diff_color=(255,255,2
     return frame
 
 def main():
-    #Parse any command-line parameters
-    commandline_args.parse_args()
+    microphone = Microphone()
+    camera = Camera()
+    
+    #Create command-line parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-m', "--microphone_index", type=int, default=-1, help="Index of microphone to use")
+    parser.add_argument('-n', "--microphone_max_index", type=int, default=5, help="Maximum number of indexes to check when looking for a microphone")
+    parser.add_argument('-c', "--camera_index",  type=int, default=-1, help="Index of camera to use")
+    parser.add_argument('-d', "--camera_max_index", type=int, default=5, help="Maximum number of indexes to check when looking for a camera")
 
-    mic_index = microphone.start(commandline_args.microphone_index, commandline_args.microphone_max_index)
-    if ((commandline_args.microphone_index >= 0) and (mic_index != commandline_args.microphone_index)):
-        print(f"Unable to use microphone with index {commandline_args.microphone_index}!")
+    #Parse command-line parameters
+    args = parser.parse_args()
+
+    mic_index = microphone.start(args.microphone_index, args.microphone_max_index)
+    if ((args.microphone_index >= 0) and (mic_index != args.microphone_index)):
+        print(f"Unable to use microphone with index {args.microphone_index}!")
         return
     elif (mic_index < 0):
         print(f"Unable to find a microphone to use!")
         return
 
-    cam_index = camera.start(commandline_args.camera_index, commandline_args.camera_max_index)
-    if ((commandline_args.camera_index >= 0) and (cam_index != commandline_args.camera_index)):
-        print(f"Unable to use camera with index {commandline_args.camera_index} - logic check - {cam_index}!")
+    cam_index = camera.start(args.camera_index, args.camera_max_index)
+    if ((args.camera_index >= 0) and (cam_index != args.camera_index)):
+        print(f"Unable to use camera with index {args.camera_index}!")
         return
     elif (cam_index < 0):
         print(f"Unable to find a camera to use!")
