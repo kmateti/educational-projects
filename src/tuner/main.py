@@ -6,7 +6,7 @@ import tkinter as tk
 from PIL import Image, ImageTk
 import cv2
 from src.piano.voices import C_MAJOR_FREQUENCIES  # Import the C major note mapping
-from main_args import MainArgs
+import argparse
 from microphone import Microphone
 from camera import Camera
 
@@ -125,24 +125,30 @@ class TunerApp:
         print(f"Switching to microphone index {self.microphone.index}")
 
 def main():
-    commandline_args = MainArgs()
     microphone = Microphone()
     camera = Camera()
+    
+    #Create command-line parameters
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-m', "--microphone_index", type=int, default=-1, help="Index of microphone to use")
+    parser.add_argument('-n', "--microphone_max_index", type=int, default=5, help="Maximum number of indexes to check when looking for a microphone")
+    parser.add_argument('-c', "--camera_index",  type=int, default=-1, help="Index of camera to use")
+    parser.add_argument('-d', "--camera_max_index", type=int, default=5, help="Maximum number of indexes to check when looking for a camera")
 
-    #Parse any command-line parameters
-    commandline_args.parse_args()
+    #Parse command-line parameters
+    args = parser.parse_args()
 
-    mic_index = microphone.start(commandline_args.microphone_index, commandline_args.microphone_max_index)
-    if ((commandline_args.microphone_index >= 0) and (mic_index != commandline_args.microphone_index)):
-        print(f"Unable to use microphone with index {commandline_args.microphone_index}!")
+    mic_index = microphone.start(args.microphone_index, args.microphone_max_index)
+    if ((args.microphone_index >= 0) and (mic_index != args.microphone_index)):
+        print(f"Unable to use microphone with index {args.microphone_index}!")
         return
     elif (mic_index < 0):
         print(f"Unable to find a microphone to use!")
         return
 
-    cam_index = camera.start(commandline_args.camera_index, commandline_args.camera_max_index)
-    if ((commandline_args.camera_index >= 0) and (cam_index != commandline_args.camera_index)):
-        print(f"Unable to use camera with index {commandline_args.camera_index}!")
+    cam_index = camera.start(args.camera_index, args.camera_max_index)
+    if ((args.camera_index >= 0) and (cam_index != args.camera_index)):
+        print(f"Unable to use camera with index {args.camera_index}!")
         return
     elif (cam_index < 0):
         print(f"Unable to find a camera to use!")
