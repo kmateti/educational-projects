@@ -5,57 +5,124 @@ This example uses the integrated webcam and microphone. Press "s" to switch came
 import tkinter as tk
 from PIL import Image, ImageTk
 import cv2
-import numpy as np
-import time
 from src.piano.voices import C_MAJOR_FREQUENCIES  # Import the C major note mapping
 import argparse
 from microphone import Microphone
 from camera import Camera
 
-microphone = Microphone()
-camera = Camera()
+class TunerApp:
+    def __init__(self, camera:Camera, microphone:Microphone):
+        """
+        Constructor
+        """
+        self.camera = camera
+        self.microphone = microphone
 
-def freq_to_note(freq: float) -> str:
-    """Map a frequency to the closest musical note using C_MAJOR_FREQUENCIES."""
-    if freq <= 0:
-        return
-    # Find the note from C_MAJOR_FREQUENCIES with the smallest absolute difference.
-    note, note_freq = min(C_MAJOR_FREQUENCIES.items(), key=lambda item: abs(item[1] - freq))
-    return note
+        # Create the Tkinter root window
+        self.root = tk.Tk()
+        self.root.title("Tuner - Camera Feed")
 
-def draw_main_overlay(frame, display_text, diff_text=None, diff_color=(255,255,255)):
-    """
-    Draws a 50% transparent black box with the main display text and (optionally) the delta text.
-    """
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 1
-    thickness = 2
-    pad_x, pad_y = 16, 12  # Padding around text
+        # Create a Label to display the video frame
+        self.video_label = tk.Label(self.root)
+        self.video_label.grid(row=0, column=0)
 
-    # Get text sizes
-    (text_w, text_h), _ = cv2.getTextSize(display_text, font, font_scale, thickness)
-    diff_w, diff_h = 0, 0
-    if diff_text:
-        (diff_w, diff_h), _ = cv2.getTextSize(diff_text, font, font_scale, thickness)
-    box_width = max(text_w, diff_w) + 2 * pad_x
-    box_height = text_h + (diff_h if diff_text else 0) + 3 * pad_y
+        # Frame for labels and data
+        self.text_frame = tk.Frame(self.root)  # Frame to hold labels and entries
+        self.text_frame.grid(row=1, column=0)
 
-    # Top-left corner of the box
-    box_x, box_y = 20, 20
+        self.cam_label = tk.Label(self.text_frame, text=f"Cam: {self.camera.index}")
+        self.cam_label.grid(row=0, column=1, padx=100)
+    
+        self.mic_label = tk.Label(self.text_frame, text=f"Mic: {self.microphone.index}")
+        self.mic_label.grid(row=1, column=1, padx=100)
 
-    # Draw the transparent rectangle
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (box_x, box_y), (box_x + box_width, box_y + box_height), (0, 0, 0), -1)
-    alpha = 0.5
-    frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+        self.freq_label = tk.Label(self.text_frame, text="Frequency: 0 Hz")
+        self.freq_label.grid(row=0, column=0, padx=100, sticky=tk.W)
 
-    # Draw the text on top of the box
-    text_org = (box_x + pad_x, box_y + pad_y + text_h)
-    cv2.putText(frame, display_text, text_org, font, font_scale, (0, 255, 0), thickness, cv2.LINE_AA)
-    if diff_text:
-        diff_org = (box_x + pad_x, box_y + pad_y + text_h + pad_y + diff_h)
-        cv2.putText(frame, diff_text, diff_org, font, font_scale, diff_color, thickness, cv2.LINE_AA)
-    return frame
+        self.note_label = tk.Label(self.text_frame, text="Note:")
+        self.note_label.grid(row=1, column=0, padx=100, sticky=tk.W)
+
+        self.delta_label = tk.Label(self.text_frame, text="Delta: 0 Hz")
+        self.delta_label.grid(row=2, column=0, padx=100, sticky=tk.W)
+
+        # Bind key press events to the root window.
+        self.root.bind('s', self.__on_switch_camera)
+        self.root.bind('m', self.__on_switch_microphone)
+
+    def run(self):
+        """
+        Main running loop
+        """
+        # Start updating the video frames.  The function calls itself repeatedly.
+        if self.camera.cap is not None:
+            self.__update_opencv_frame(self.video_label, self.camera.cap)
+
+        # Tkinter main loop.  This needs to run to keep the window open and the video updating.
+        self.root.mainloop()
+
+    @staticmethod
+    def freq_to_note(freq: float) -> str:
+        """Map a frequency to the closest musical note using C_MAJOR_FREQUENCIES."""
+        if freq <= 0:
+            return ""
+        # Find the note from C_MAJOR_FREQUENCIES with the smallest absolute difference.
+        note, note_freq = min(C_MAJOR_FREQUENCIES.items(), key=lambda item: abs(item[1] - freq))
+        return note
+
+    def __update_opencv_frame(self, label, cap):
+        """
+        Updates the Tkinter label with the latest frame from the OpenCV video capture.
+
+        Args:
+            label: The Tkinter Label widget to display the video frame.
+            cap: The OpenCV VideoCapture object.
+        """
+        ret, frame = cap.read()  # Read a frame from the video capture
+        if ret:
+            # Convert the OpenCV frame to a PIL Image
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Corrected color conversion
+            img = Image.fromarray(frame)
+            imgtk = ImageTk.PhotoImage(image=img)  # Convert PIL Image to PhotoImage
+
+            # Update the Label with the new image
+            label.imgtk = imgtk  # Keep a reference!
+            label.configure(image=imgtk)
+
+            #Update stats
+            self.cam_label["text"] = f"Cam: {self.camera.index}"
+            self.mic_label["text"] = f"Mic: {self.microphone.index}"
+
+            note_text = self.freq_to_note(self.microphone.detected_frequency)
+            self.freq_label["text"] = f"Frequency: {self.microphone.detected_frequency:.1f} Hz"
+            self.note_label["text"] = f"Note: {note_text}"
+
+            target_freq = C_MAJOR_FREQUENCIES.get(note_text, None)
+            diff_text = None
+            diff_color = (255, 255, 255)
+            if target_freq is not None:
+                diff = self.microphone.detected_frequency - target_freq
+                diff_color = (255, 0, 0) if diff < 0 else (0, 0, 255)
+                diff_text = f"Delta: {diff:+.1f} Hz"        
+            self.delta_label["text"] = diff_text
+
+        # Schedule the next update.  This creates a loop.
+        label.after(10, self.__update_opencv_frame, label, cap) # 10 millisecond delay
+
+    def __on_switch_camera(self, event):
+        """
+        Handles switching to the next camera index
+        """
+        print(f"Switching camera: current camera index {self.camera.index}")
+        self.camera.switch()
+        print(f"Switching to camera index {self.camera.index}")
+
+    def __on_switch_microphone(self, event):
+        """
+        Handles switching to the next microphone index
+        """
+        print(f"Switching microphone: current mic index {self.microphone.index}")
+        self.microphone.switch()
+        print(f"Switching to microphone index {self.microphone.index}")
 
 def main():
     microphone = Microphone()
@@ -87,48 +154,8 @@ def main():
         print(f"Unable to find a camera to use!")
         return
 
-    while True:
-        ret, frame = camera.cap.read()
-        if not ret:
-            print("Failed to get frame from camera")
-            break
-
-        frame = cv2.flip(frame, 1)
-        note_text = freq_to_note(microphone.detected_frequency)
-        display_text = f"Freq: {microphone.detected_frequency:.1f} Hz, Note: {note_text}"
-        target_freq = C_MAJOR_FREQUENCIES.get(note_text, None)
-        diff_text = None
-        diff_color = (255, 255, 255)
-        if target_freq is not None:
-            diff = microphone.detected_frequency - target_freq
-            diff_color = (255, 0, 0) if diff < 0 else (0, 0, 255)
-            diff_text = f"Delta: {diff:+.1f} Hz"
-
-        frame = draw_main_overlay(frame, display_text, diff_text, diff_color)
-
-        # Overlay current video and audio source info on the bottom-right
-        height, width, _ = frame.shape
-        source_text = f"Cam: {cam_index} | Mic: {mic_index}"
-        cv2.putText(frame, source_text, (width - 300, height - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
-        
-        cv2.imshow("Tuner - Camera Feed", frame)
-        key = cv2.waitKey(1) & 0xFF
-        
-        if key == ord('q'):
-            break
-        elif key == ord('s'):
-            # Switch camera index: release current camera and try the next index.
-            print(f"Switching camera: current camera index {camera.index}")
-            camera.switch()
-            print(f"Switching to camera index {camera.index}")
-        elif key == ord('m'):
-            # Switch microphone: close the current audio stream and try the next microphone.
-            print(f"Switching microphone: current mic index {microphone.index}")
-            microphone.switch()
-            print(f"Switching to microphone index {microphone.index}")
-
-    cv2.destroyAllWindows()
+    app = TunerApp(camera, microphone)
+    app.run()
 
 if __name__ == "__main__":
     main()
