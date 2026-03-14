@@ -35,8 +35,7 @@ class Sector:
     _min_depth_mm: int = field(default=0, init=False, repr=False)
     _max_depth_mm: int = field(default=0, init=False, repr=False)
 
-    def detect(self, frame_data: FrameData) -> Optional[SectorDetection]:
-        intrinsics = frame_data.depth_intrinsics
+    def ensure_cache(self, intrinsics) -> None:
         intrinsics_key = (
             intrinsics.width,
             intrinsics.height,
@@ -50,6 +49,9 @@ class Sector:
             self._cached_intrinsics_key = intrinsics_key
             self._min_depth_mm = int(self.bounds.min_range * 1000)
             self._max_depth_mm = int(self.bounds.max_range * 1000)
+
+    def detect(self, frame_data: FrameData) -> Optional[SectorDetection]:
+        self.ensure_cache(frame_data.depth_intrinsics)
 
         valid_mask = self._cached_mask & (frame_data.depth_image > self._min_depth_mm) & (frame_data.depth_image < self._max_depth_mm)
         if not np.any(valid_mask):

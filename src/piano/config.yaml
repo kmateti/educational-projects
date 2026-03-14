@@ -8,7 +8,7 @@ sectors:
       elevation_span: 15
     note_mapper:
       min_range: 0.5
-      max_range: 2.8
+      max_range: 2.5
       lowest_note: 'C2'
       highest_note: 'C3'
   - name: "Tenor"
@@ -20,7 +20,7 @@ sectors:
       elevation_span: 15
     note_mapper:
       min_range: 0.5
-      max_range: 2.8
+      max_range: 2.5
       lowest_note: 'G2'
       highest_note: 'G3'
   - name: "Alto"
@@ -32,7 +32,7 @@ sectors:
       elevation_span: 15
     note_mapper:
       min_range: 0.5
-      max_range: 2.8
+      max_range: 2.5
       lowest_note: 'E3'
       highest_note: 'E4'
   - name: "Soprano"
@@ -44,6 +44,6 @@ sectors:
       elevation_span: 15
     note_mapper:
       min_range: 0.5
-      max_range: 2.8
+      max_range: 2.5
       lowest_note: 'C4'
       highest_note: 'C5'

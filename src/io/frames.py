@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
+import cv2
 import pyrealsense2 as rs
 from typing import Optional
 
@@ -26,6 +27,7 @@ def get_color_and_depth_frames(pipeline, align) -> Optional[FrameData]:
     depth_intrinsics = aligned_depth_frame.profile.as_video_stream_profile().get_intrinsics()
 
     color_image = np.asanyarray(color_frame.get_data())
+    color_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
     depth_image = np.asanyarray(aligned_depth_frame.get_data())
     
     return FrameData(

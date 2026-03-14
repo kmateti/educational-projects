@@ -41,7 +41,7 @@ SECTORS_WITH_MAPPERS: List[SectorWithMapper] = [
     SectorWithMapper(name, s_conf) for name, s_conf in sector_configs.items()
 ]
 
-NUM_POINTS = 50 * 50  # Minimum number of valid points for a valid detection
+NUM_POINTS = 50 * 50 // 2 # Minimum number of valid points for a valid detection
 
 @dataclass
 class DisplayGeometry:
@@ -60,24 +60,23 @@ def get_discrete_color(index: int, total: int) -> tuple[int, int, int]:
 
 
 def build_display_geometry(sectors_with_mappers: List[SectorWithMapper], intrinsics) -> dict[str, DisplayGeometry]:
-    """Precompute overlay geometry that is constant for a given camera intrinsics setup."""
+    """Precompute overlay geometry directly from the cached sector masks."""
     width = intrinsics.width
-    fx = intrinsics.fx
-    fy = intrinsics.fy
-    ppx = intrinsics.ppx
-    ppy = intrinsics.ppy
-    h_fov = 2 * np.rad2deg(np.arctan(width / (2 * fx)))
 
     geometry: dict[str, DisplayGeometry] = {}
     for swm in sectors_with_mappers:
-        bounds = swm.sector.bounds
-        x_left = int(ppx + fx * np.tan(np.deg2rad(bounds.azimuth_center - bounds.azimuth_span / 2)))
-        x_right = int(ppx + fx * np.tan(np.deg2rad(bounds.azimuth_center + bounds.azimuth_span / 2)))
-        y_top = int(ppy + fy * np.tan(np.deg2rad(bounds.elevation_center - bounds.elevation_span / 2)))
-        y_bottom = int(ppy + fy * np.tan(np.deg2rad(bounds.elevation_center + bounds.elevation_span / 2)))
+        swm.sector.ensure_cache(intrinsics)
+        ys, xs = np.nonzero(swm.sector._cached_mask)
+        if xs.size == 0 or ys.size == 0:
+            continue
+
+        x_left = int(xs.min())
+        x_right = int(xs.max())
+        y_top = int(ys.min())
+        y_bottom = int(ys.max())
         x_left_f = width - 1 - x_right
         x_right_f = width - 1 - x_left
-        label_x = width - 1 - int(((bounds.azimuth_center + h_fov / 2) / h_fov) * width)
+        label_x = (x_left_f + x_right_f) // 2
         geometry[swm.name] = DisplayGeometry(
             guide_rect=((x_left_f, y_top), (x_right_f, y_bottom)),
             label_x=label_x,
@@ -147,6 +146,8 @@ def overlay_sectors(frame_data: FrameData,
     return blended, detections
 
 def main(bag_file=None):
+    pipeline_started = False
+    tone_started = False
     try:
         if bag_file and not os.path.exists(bag_file):
             raise FileNotFoundError(f"The specified .bag file does not exist: {bag_file}")
@@ -156,9 +157,11 @@ def main(bag_file=None):
         if bag_file:
             rs.config.enable_device_from_file(config, bag_file)
         
+        # Let RealSense choose a compatible stream profile for this device.
         config.enable_stream(rs.stream.depth)
         config.enable_stream(rs.stream.color)
         pipeline_profile = pipeline.start(config)
+        pipeline_started = True
         
         depth_stream = pipeline_profile.get_stream(rs.stream.depth).as_video_stream_profile()
         color_stream = pipeline_profile.get_stream(rs.stream.color).as_video_stream_profile()
@@ -171,15 +174,19 @@ def main(bag_file=None):
 
         align_to = rs.stream.color
         align = rs.align(align_to)
-        display_geometry = build_display_geometry(SECTORS_WITH_MAPPERS, depth_intrinsics)
+        display_geometry = None
 
         tone_gen = ToneGenerator()
         tone_gen.start()
+        tone_started = True
 
         while True:
             frame_data = get_color_and_depth_frames(pipeline, align)
             if frame_data is None:
                 continue
+
+            if display_geometry is None:
+                display_geometry = build_display_geometry(SECTORS_WITH_MAPPERS, frame_data.depth_intrinsics)
             
             overlay_image, detections = overlay_sectors(frame_data, SECTORS_WITH_MAPPERS, display_geometry)
             
@@ -199,9 +206,9 @@ def main(bag_file=None):
         print(e)
         raise
     finally:
-        if 'pipeline' in locals():
+        if 'pipeline' in locals() and pipeline_started:
             pipeline.stop()
-        if 'tone_gen' in locals():
+        if 'tone_gen' in locals() and tone_started:
             tone_gen.stop()
 
 if __name__ == "__main__":
