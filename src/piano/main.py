@@ -62,7 +62,7 @@ def overlay_sectors(frame_data: FrameData,
     Overlay sector detections on the color image using text that reflects the ray configuration.
     The text color for each sector is chosen based on the discrete color corresponding to the note range.
     """
-    overlay_image = frame_data.color_image_rgb.copy()
+    overlay_image = cv2.flip(frame_data.color_image_rgb.copy(), 1)
     blended = overlay_image.copy()
     
     # Convert depth image (in millimeters) to meters.
@@ -95,7 +95,7 @@ def overlay_sectors(frame_data: FrameData,
         
         # Compute text x position using the sector's azimuth_center.
         img_width = overlay_image.shape[1]
-        x_pos = int(((swm.sector.bounds.azimuth_center + h_fov/2) / h_fov) * img_width)
+        x_pos = img_width - 1 - int(((swm.sector.bounds.azimuth_center + h_fov/2) / h_fov) * img_width)
         
         cv2.putText(blended, f"{swm.sector.name}", (x_pos, 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, discrete_color, 2)
@@ -108,7 +108,7 @@ def overlay_sectors(frame_data: FrameData,
         
         # Apply discrete color overlay for each note range.
         color_overlay = np.zeros_like(overlay_image)
-        color_overlay[detection.valid_mask] = discrete_color
+        color_overlay[np.fliplr(detection.valid_mask)] = discrete_color
         blended = cv2.addWeighted(blended, 1.0, color_overlay, 0.4, 0)
         
         detections.append((detection, swm))
