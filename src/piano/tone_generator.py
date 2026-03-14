@@ -1,23 +1,21 @@
 import numpy as np
 import pyaudio
-import threading
-from queue import Queue
 from typing import List
-import time
 
 class ToneGenerator:
-    def __init__(self, sample_rate=44100):
+    def __init__(self, sample_rate=44100, buffer_size=1024):
         self.sample_rate = sample_rate
-        self.buffer_size = 4096  # Increased buffer size for smoother playback
+        self.buffer_size = buffer_size
         self.stream = None
         self.audio = pyaudio.PyAudio()
         self.current_frequencies = [0.0, 0.0, 0.0, 0.0]  # Support for 4 channels
         self.target_frequencies = [0.0, 0.0, 0.0, 0.0]
         self.is_running = False
         self.phase = [0.0, 0.0, 0.0, 0.0]  # Keep track of phase for continuity
+        self.sample_positions = np.arange(self.buffer_size, dtype=np.float32) / self.sample_rate
         
         # Frequency smoothing parameters
-        self.smoothing_factor = 0.05  # Higher = smoother but slower transitions
+        self.smoothing_factor = 0.05
         
     def audio_callback(self, in_data, frame_count, time_info, status):
         """Generate continuous audio samples with phase continuity."""
@@ -30,7 +28,7 @@ class ToneGenerator:
                                          (1 - self.smoothing_factor) * self.target_frequencies[i])
         
         # Generate samples
-        t = np.arange(frame_count) / self.sample_rate
+        t = self.sample_positions[:frame_count]
         samples = np.zeros(frame_count, dtype=np.float32)
         
         for i, freq in enumerate(self.current_frequencies):
@@ -68,7 +66,6 @@ class ToneGenerator:
         self.audio.terminate()
     
     def set_frequencies(self, frequencies: List[float]):
-        """Update target frequencies - thread safe."""
-        # Pad with zeros if needed
+        """Update target frequencies for up to four simultaneous voices."""
         freqs = list(frequencies) + [0.0] * (4 - len(frequencies))
         self.target_frequencies = freqs[:4]

@@ -1,8 +1,5 @@
-import time
-import pyrealsense2 as rs
 import numpy as np
-from dataclasses import dataclass
-import cv2
+from dataclasses import dataclass, field
 from typing import Optional
 
 from src.io.frames import FrameData
@@ -33,65 +30,52 @@ class Sector:
     name: str
     color: tuple[int, int, int]
     bounds: AngularBounds
+    _cached_mask: np.ndarray | None = field(default=None, init=False, repr=False)
+    _cached_intrinsics_key: tuple[int, int, float, float, float, float] | None = field(default=None, init=False, repr=False)
+    _min_depth_mm: int = field(default=0, init=False, repr=False)
+    _max_depth_mm: int = field(default=0, init=False, repr=False)
 
     def detect(self, frame_data: FrameData) -> Optional[SectorDetection]:
-        return get_angular_detection(frame_data, self.bounds, self.name, self.color)
+        intrinsics = frame_data.depth_intrinsics
+        intrinsics_key = (
+            intrinsics.width,
+            intrinsics.height,
+            intrinsics.fx,
+            intrinsics.fy,
+            intrinsics.ppx,
+            intrinsics.ppy,
+        )
+        if self._cached_intrinsics_key != intrinsics_key:
+            self._cached_mask = _build_angular_mask(intrinsics, self.bounds)
+            self._cached_intrinsics_key = intrinsics_key
+            self._min_depth_mm = int(self.bounds.min_range * 1000)
+            self._max_depth_mm = int(self.bounds.max_range * 1000)
+
+        valid_mask = self._cached_mask & (frame_data.depth_image > self._min_depth_mm) & (frame_data.depth_image < self._max_depth_mm)
+        if not np.any(valid_mask):
+            return None
+
+        depth_points = frame_data.depth_image[valid_mask]
+        return SectorDetection(
+            min_distance_m=float(np.min(depth_points)) / 1000.0,
+            num_valid_points=int(np.count_nonzero(valid_mask)),
+            azimuth_deg=self.bounds.azimuth_center,
+            valid_mask=valid_mask,
+        )
 
 
-def get_angular_detection(frame_data: FrameData, bounds: AngularBounds, name: str, color: tuple[int, int, int]) -> Optional[SectorDetection]:
-    """Detect points within an angular sector."""
-    height, width = frame_data.depth_image.shape
-    depths = frame_data.depth_image.astype(float) / 1000.0  # Convert to meters
+def _build_angular_mask(intrinsics, bounds: AngularBounds) -> np.ndarray:
+    """Create a cached boolean mask for pixels that fall inside the sector angles."""
+    height = intrinsics.height
+    width = intrinsics.width
+    px = np.arange(width, dtype=np.float32)
+    py = np.arange(height, dtype=np.float32)
+    azimuth = np.rad2deg(np.arctan2(px - intrinsics.ppx, intrinsics.fx))
+    elevation = np.rad2deg(np.arctan2(py - intrinsics.ppy, intrinsics.fy))
 
-    # Create coordinate grid
-    px, py = np.meshgrid(np.arange(width), np.arange(height))
-    
-    # Convert image coordinates to 3D rays using intrinsics
-    fx = frame_data.depth_intrinsics.fx
-    fy = frame_data.depth_intrinsics.fy
-    ppx = frame_data.depth_intrinsics.ppx
-    ppy = frame_data.depth_intrinsics.ppy
-    
-    x = (px - ppx) * depths / fx
-    y = (py - ppy) * depths / fy
-    z = depths
-    
-    # Calculate angles
-    azimuth = np.rad2deg(np.arctan2(x, z))
-    elevation = np.rad2deg(np.arctan2(y, z))
-    
-    # Create sector mask
     half_az_span = bounds.azimuth_span / 2
     half_el_span = bounds.elevation_span / 2
-    
-    valid_mask = (depths > bounds.min_range) & (depths < bounds.max_range) & \
-                (azimuth >= bounds.azimuth_center - half_az_span) & \
-                (azimuth <= bounds.azimuth_center + half_az_span) & \
-                (elevation >= bounds.elevation_center - half_el_span) & \
-                (elevation <= bounds.elevation_center + half_el_span)
-    
-    if not np.any(valid_mask):
-        return None
-    
-    # Draw sector overlay
-    depth_points = depths[valid_mask]
-    min_distance = np.min(depth_points)
-    
-    # Visualize sector
-    intensity = np.clip((1.0 - depth_points/bounds.max_range) * 255, 0, 255).astype(np.uint8)
-    overlay = frame_data.color_image_rgb.copy()
-    overlay[valid_mask] = tuple(int(c * 0.7) for c in color)  # Sector color at 70% intensity
-    
-    # Blend with original image
-    alpha = 0.3
-    frame_data.color_image_rgb[:] = cv2.addWeighted(
-        frame_data.color_image_rgb, 1 - alpha,
-        overlay, alpha, 0
-    )
-    
-    return SectorDetection(
-        min_distance_m=min_distance,
-        num_valid_points=np.count_nonzero(valid_mask),
-        azimuth_deg=bounds.azimuth_center,
-        valid_mask=valid_mask
-    )
+
+    azimuth_mask = (azimuth >= bounds.azimuth_center - half_az_span) & (azimuth <= bounds.azimuth_center + half_az_span)
+    elevation_mask = (elevation >= bounds.elevation_center - half_el_span) & (elevation <= bounds.elevation_center + half_el_span)
+    return elevation_mask[:, np.newaxis] & azimuth_mask[np.newaxis, :]

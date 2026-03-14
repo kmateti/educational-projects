@@ -1,10 +1,9 @@
-import time
 import pyrealsense2 as rs
 import numpy as np
 import cv2
 import argparse
 import os
-import math
+from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 from src.piano.tone_generator import ToneGenerator
@@ -44,6 +43,11 @@ SECTORS_WITH_MAPPERS: List[SectorWithMapper] = [
 
 NUM_POINTS = 50 * 50  # Minimum number of valid points for a valid detection
 
+@dataclass
+class DisplayGeometry:
+    guide_rect: tuple[tuple[int, int], tuple[int, int]]
+    label_x: int
+
 def get_discrete_color(index: int, total: int) -> tuple[int, int, int]:
     """
     Generate a discrete color from a continuous HSV colormap.
@@ -55,37 +59,47 @@ def get_discrete_color(index: int, total: int) -> tuple[int, int, int]:
     return tuple(int(c) for c in bgr)
 
 
-def overlay_sectors(frame_data: FrameData,
-                    sectors_with_mappers: List[SectorWithMapper]
-                   ) -> Tuple[np.ndarray, List[Tuple[SectorDetection, SectorWithMapper]]]:
-    """
-    Overlay sector detections on the color image using text that reflects the ray configuration.
-    The text color for each sector is chosen based on the discrete color corresponding to the note range.
-    """
-    overlay_image = cv2.flip(frame_data.color_image_rgb.copy(), 1)
-    blended = overlay_image.copy()
-    
-    # Convert depth image (in millimeters) to meters.
-    depths = frame_data.depth_image.astype(float) / 1000.0
-    
-    # Calculate the horizontal FOV of the camera from intrinsics.
-    width = frame_data.depth_intrinsics.width
-    fx = frame_data.depth_intrinsics.fx
+def build_display_geometry(sectors_with_mappers: List[SectorWithMapper], intrinsics) -> dict[str, DisplayGeometry]:
+    """Precompute overlay geometry that is constant for a given camera intrinsics setup."""
+    width = intrinsics.width
+    fx = intrinsics.fx
+    fy = intrinsics.fy
+    ppx = intrinsics.ppx
+    ppy = intrinsics.ppy
     h_fov = 2 * np.rad2deg(np.arctan(width / (2 * fx)))
-    fy = frame_data.depth_intrinsics.fy
-    ppx = frame_data.depth_intrinsics.ppx
-    ppy = frame_data.depth_intrinsics.ppy
-    img_width = blended.shape[1]
 
-    # Draw bounding boxes for all sectors so users can see where to place their hands
+    geometry: dict[str, DisplayGeometry] = {}
     for swm in sectors_with_mappers:
         bounds = swm.sector.bounds
         x_left = int(ppx + fx * np.tan(np.deg2rad(bounds.azimuth_center - bounds.azimuth_span / 2)))
         x_right = int(ppx + fx * np.tan(np.deg2rad(bounds.azimuth_center + bounds.azimuth_span / 2)))
         y_top = int(ppy + fy * np.tan(np.deg2rad(bounds.elevation_center - bounds.elevation_span / 2)))
         y_bottom = int(ppy + fy * np.tan(np.deg2rad(bounds.elevation_center + bounds.elevation_span / 2)))
-        # Mirror x coordinates for the horizontally flipped image
-        x_left_f, x_right_f = img_width - 1 - x_right, img_width - 1 - x_left
+        x_left_f = width - 1 - x_right
+        x_right_f = width - 1 - x_left
+        label_x = width - 1 - int(((bounds.azimuth_center + h_fov / 2) / h_fov) * width)
+        geometry[swm.name] = DisplayGeometry(
+            guide_rect=((x_left_f, y_top), (x_right_f, y_bottom)),
+            label_x=label_x,
+        )
+    return geometry
+
+
+def overlay_sectors(frame_data: FrameData,
+                    sectors_with_mappers: List[SectorWithMapper],
+                    display_geometry: dict[str, DisplayGeometry]
+                   ) -> Tuple[np.ndarray, List[Tuple[SectorDetection, SectorWithMapper]]]:
+    """
+    Overlay sector detections on the color image using text that reflects the ray configuration.
+    The text color for each sector is chosen based on the discrete color corresponding to the note range.
+    """
+    overlay_image = cv2.flip(frame_data.color_image, 1)
+    blended = overlay_image.copy()
+
+    # Draw bounding boxes for all sectors so users can see where to place their hands
+    for swm in sectors_with_mappers:
+        geometry = display_geometry[swm.name]
+        (x_left_f, y_top), (x_right_f, y_bottom) = geometry.guide_rect
         color = tuple(swm.sector.color)
         cv2.rectangle(blended, (x_left_f, y_top), (x_right_f, y_bottom), color, 2)
         cv2.putText(blended, swm.sector.name, (x_left_f, max(y_top - 8, 15)),
@@ -112,7 +126,7 @@ def overlay_sectors(frame_data: FrameData,
         note_label = swm.mapper.get_note_from_distance(detection.min_distance_m)
         
         # Compute text x position using the sector's azimuth_center.
-        x_pos = img_width - 1 - int(((swm.sector.bounds.azimuth_center + h_fov/2) / h_fov) * img_width)
+        x_pos = display_geometry[swm.name].label_x
         
         cv2.putText(blended, f"{swm.sector.name}", (x_pos, 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, discrete_color, 2)
@@ -157,19 +171,17 @@ def main(bag_file=None):
 
         align_to = rs.stream.color
         align = rs.align(align_to)
+        display_geometry = build_display_geometry(SECTORS_WITH_MAPPERS, depth_intrinsics)
 
         tone_gen = ToneGenerator()
         tone_gen.start()
-
-        frame_count = 0
-        start_time = time.time()
 
         while True:
             frame_data = get_color_and_depth_frames(pipeline, align)
             if frame_data is None:
                 continue
             
-            overlay_image, detections = overlay_sectors(frame_data, SECTORS_WITH_MAPPERS)
+            overlay_image, detections = overlay_sectors(frame_data, SECTORS_WITH_MAPPERS, display_geometry)
             
             # For each detection, use the corresponding mapper to get the frequency,
             # then update the tone generator with the obtained frequencies
@@ -182,7 +194,6 @@ def main(bag_file=None):
             cv2.imshow('Depth Camera Piano', overlay_image)
             if cv2.waitKey(1) in [ord('q'), 27]:
                 break
-            frame_count += 1
             
     except Exception as e:
         print(e)
