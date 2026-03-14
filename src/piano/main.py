@@ -72,7 +72,25 @@ def overlay_sectors(frame_data: FrameData,
     width = frame_data.depth_intrinsics.width
     fx = frame_data.depth_intrinsics.fx
     h_fov = 2 * np.rad2deg(np.arctan(width / (2 * fx)))
-    
+    fy = frame_data.depth_intrinsics.fy
+    ppx = frame_data.depth_intrinsics.ppx
+    ppy = frame_data.depth_intrinsics.ppy
+    img_width = blended.shape[1]
+
+    # Draw bounding boxes for all sectors so users can see where to place their hands
+    for swm in sectors_with_mappers:
+        bounds = swm.sector.bounds
+        x_left = int(ppx + fx * np.tan(np.deg2rad(bounds.azimuth_center - bounds.azimuth_span / 2)))
+        x_right = int(ppx + fx * np.tan(np.deg2rad(bounds.azimuth_center + bounds.azimuth_span / 2)))
+        y_top = int(ppy + fy * np.tan(np.deg2rad(bounds.elevation_center - bounds.elevation_span / 2)))
+        y_bottom = int(ppy + fy * np.tan(np.deg2rad(bounds.elevation_center + bounds.elevation_span / 2)))
+        # Mirror x coordinates for the horizontally flipped image
+        x_left_f, x_right_f = img_width - 1 - x_right, img_width - 1 - x_left
+        color = tuple(swm.sector.color)
+        cv2.rectangle(blended, (x_left_f, y_top), (x_right_f, y_bottom), color, 2)
+        cv2.putText(blended, swm.sector.name, (x_left_f, max(y_top - 8, 15)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
     detections: List[Tuple[SectorDetection, SectorWithMapper]] = []
     
     for swm in sectors_with_mappers:
@@ -94,7 +112,6 @@ def overlay_sectors(frame_data: FrameData,
         note_label = swm.mapper.get_note_from_distance(detection.min_distance_m)
         
         # Compute text x position using the sector's azimuth_center.
-        img_width = overlay_image.shape[1]
         x_pos = img_width - 1 - int(((swm.sector.bounds.azimuth_center + h_fov/2) / h_fov) * img_width)
         
         cv2.putText(blended, f"{swm.sector.name}", (x_pos, 25),
