@@ -112,12 +112,16 @@ def main():
     # Start the microphone listener with the current mic device.
     pa, audio_stream = start_audio_stream(mic_index)
 
-    cam_index = 2  # start with camera index 2 (change as desired)
+    cam_index = 1  # start with camera index 2 (change as desired)
     cap = open_camera(cam_index)
     if cap is None or not cap.isOpened():
         return
     max_cam_index = 5   # maximum camera index to cycle through
 
+    # Create a named window and set it to full screen
+    cv2.namedWindow("Tuner - Camera Feed", cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty("Tuner - Camera Feed", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    
     while True:
         ret, frame = cap.read()
         if not ret:
